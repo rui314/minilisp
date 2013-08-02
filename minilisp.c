@@ -874,7 +874,8 @@ int main(int argc, char **argv) {
     char buf[BUFSIZE];
     for (;;) {
         char *p = buf;
-        fgets(p, BUFSIZE, stdin);
+        if (!fgets(p, BUFSIZE, stdin))
+          return 0;
         *sexp = read(env, root, &p);
         if (!*sexp) continue;
         *expanded = macroexpand(env, root, sexp);
