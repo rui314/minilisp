@@ -3,7 +3,7 @@ can't do anything other than a simple math, but might be interesting to those
 who want to see how dynamic scoping, macro system, and copying GC can be
 implemented in C.
 
-To compile:
+Compile:
 
   $ cc -o minilisp minilisp.c
 
@@ -25,6 +25,7 @@ Examples:
 
   (defmacro if-zero (x then) (list 'if (list '= x 0) then))
   (macroexpand '(if-zero x (print x)))
-  ;; (quote (if-not-zero x (print x)))
+  ;; (quote (if-zero x (print x)))
+
   (if-zero 0 42)
   ;; prints "42"
