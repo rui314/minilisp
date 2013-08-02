@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
 #include <alloca.h>
@@ -83,7 +84,7 @@ static int mem_nused;
 static int gc_running = 0;
 #define DEBUG_GC 0
 
-void error(char *fmt, ...);
+void error(char *fmt, ...) __attribute((noreturn));
 Obj *read(Env *env, Obj **root, char **p);
 Obj *read_one(Env *env, Obj **root, char **p);
 Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
@@ -166,7 +167,7 @@ Obj *make_spe(int spetype) {
 
 Obj *copy(Env *env, Obj **root, Obj **obj) {
     Obj *r;
-    size_t loc = (void *)(*obj) - memory;
+    ptrdiff_t loc = (void *)(*obj) - memory;
     if (0 <= loc && loc < MEMORY_SIZE)
         return *obj;
     switch ((*obj)->type) {
@@ -507,7 +508,6 @@ void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
     Obj **def = NEXT_VAR;
     Obj **map = NEXT_VAR;
     *map = Nil;
-    int i;
     for (p = vars, q = values; *p != Nil; *p = (*p)->cdr, *q = (*q)->cdr) {
         *val = (*q)->car;
         *sym = (*p)->car;
@@ -664,6 +664,7 @@ Obj *prim_setq(Env *env, Obj **root, Obj **list) {
         error("unbound variable", (*list)->car->name);
     *value = (*list)->cdr->car;
     (*bind)->cdr = eval(env, root, value);
+    return (*bind)->cdr;
 }
 
 Obj *prim_plus(Env *env, Obj **root, Obj **list) {
@@ -873,7 +874,7 @@ int main(int argc, char **argv) {
     char buf[BUFSIZE];
     for (;;) {
         char *p = buf;
-        char *dummy = fgets(p, BUFSIZE, stdin);
+        fgets(p, BUFSIZE, stdin);
         *sexp = read(env, root, &p);
         if (!*sexp) continue;
         *expanded = macroexpand(env, root, sexp);
