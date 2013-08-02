@@ -309,6 +309,9 @@ Obj *read_sexp(Env *env, Obj **root, char **p) {
                 error("stray dot");
             *tmp = read_one(env, root, p);
             (*tail)->cdr = *tmp;
+            *obj = read_one(env, root, p);
+            if (*obj != Cparen)
+              error("Closed parenthesis expected after dot");
             break;
         }
         if (*obj == Cparen) {
