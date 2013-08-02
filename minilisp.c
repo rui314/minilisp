@@ -849,7 +849,7 @@ void define_primitives(Env *env, Obj **root) {
 int main(int argc, char **argv) {
     Obj **root = NULL;
     ADD_ROOT(2);
-    Obj **sexp = NEXT_VAR;
+    Obj **expr = NEXT_VAR;
     Obj **expanded = NEXT_VAR;
 
     memory = mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -876,11 +876,13 @@ int main(int argc, char **argv) {
         char *p = buf;
         if (!fgets(p, BUFSIZE, stdin))
           return 0;
-        *sexp = read(env, root, &p);
-        if (!*sexp) continue;
-        *expanded = macroexpand(env, root, sexp);
-        print(eval(env, root, expanded));
-        printf("\n");
+        for (;;) {
+          *expr = read(env, root, &p);
+          if (!*expr) break;
+          *expanded = macroexpand(env, root, expr);
+          print(eval(env, root, expanded));
+          printf("\n");
+        }
     }
     return 0;
 }
