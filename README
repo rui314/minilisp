@@ -5,7 +5,11 @@ implemented in C.
 
 Compile:
 
-  $ cc -o minilisp minilisp.c
+  $ make
+
+Test:
+
+  $ make test
 
 Examples:
 
