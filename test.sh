@@ -1,20 +1,24 @@
 #!/bin/bash
 
+function fail() {
+  echo -n -e '\e[1;31m[ERROR]\e[0m '
+  echo "$1"
+  exit 1
+}
+
 function run() {
   echo -n "Testing $1 ... "
 
   error=$(echo "$3" | ./minilisp 2>&1 > /dev/null)
   if [ -n "$error" ]; then
     echo FAILED
-    echo ERROR: "$error"
-    exit 1
+    fail "$error"
   fi
 
   result=$(echo "$3" | ./minilisp 2> /dev/null | tail -1)
   if [ "$result" != "$2" ]; then
     echo FAILED
-    echo "$2 expected, but got $result"
-    exit 1
+    fail "$2 expected, but got $result"
   fi
   echo ok
 }
