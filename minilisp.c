@@ -1,32 +1,47 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <stdarg.h>
-#include <string.h>
+// This software is in the public domain.
+
 #include <alloca.h>
 #include <ctype.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 
+//======================================================================
+// Lisp objects
+//======================================================================
+
+// The first word of the object in memory represents its type.
 enum {
-    TMOVED = 7,
-    TINT,
+    // Regular objects visible from the user.
+    TINT = 1,
     TSTRING,
     TCELL,
     TSYMBOL,
     TPRIMITIVE,
     TFUNCTION,
     TMACRO,
-    TSPE,
+    TSPECIAL,
+    // The marker that indicates the object has been moved to other location by
+    // GC. The new location can be found at the forwarding pointer. Only the
+    // functions to do garbage collection set and handle the object of this
+    // type. Other functions will never see the object of this type.
+    TMOVED,
+};
 
-    // Spetypes
-    TNIL = 100,
+// Subtypes for TSPECIAL.
+enum {
+    TNIL = 1,
     TDOT,
     TCPAREN,
     TTRUE,
-} Type;
+};
 
 struct Obj;
 
+// The environment frame to manage variables.
 typedef struct Env {
     struct Obj *vars;
     struct Env *next;
@@ -34,40 +49,37 @@ typedef struct Env {
 
 typedef struct Obj *Primitive(Env *env, struct Obj **root, struct Obj **args);
 
+// The object type.
 typedef struct Obj {
+    // The first word of the object represents the type of the object. Any code
+    // that handles object needs to check its type first, then access the
+    // following union members.
     int type;
+
+    // Object values.
     union {
-        void *moved;
         // Int
-        struct {
-            int value;
-        };
+        int value;
         // String
-        struct {
-            char strbody[1];
-        };
+        char strbody[1];
         // Cell
         struct {
             struct Obj *car;
             struct Obj *cdr;
         };
         // Symbol
-        struct {
-            char name[1];
-        };
+        char name[1];
         // Primitive
-        struct {
-            Primitive *fn;
-        };
-        // Function and Macro
+        Primitive *fn;
+        // Function or Macro
         struct {
             struct Obj *params;
             struct Obj *body;
         };
-        // Spe
-        struct {
-            int spetype;
-        };
+        // Subtype for special type
+        int subtype;
+        // Forwarding pointer
+        void *moved;
     };
 } Obj;
 
@@ -76,21 +88,48 @@ static Obj *Dot;
 static Obj *Cparen;
 static Obj *True;
 
+// The size of the heap in byte.
 #define MEMORY_SIZE 4096
+
+// The start of the heap will be aligned to this constant.
 #define ALIGN 16
 
 static void *memory;
 static int mem_nused;
 static int gc_running = 0;
+
+// Set true to enable GC debug output
 #define DEBUG_GC 0
 
 void error(char *fmt, ...) __attribute((noreturn));
-Obj *read(Env *env, Obj **root, char **p);
-Obj *read_one(Env *env, Obj **root, char **p);
 Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
 void gc(Env *env, Obj **root);
 void print(Obj *obj);
 
+//======================================================================
+// Memory management
+//======================================================================
+
+// Currently we are using Cheney's copying GC algorithm, which splits the
+// available memory space into two halves and moves all objects from one half to
+// another every time GC is invoked. That means the address of the object keeps
+// changing. You cannot take the address of an object and keep it in a C
+// variable because the address will soon become invalid if there's a path to
+// the code which may invoke GC.
+//
+// In order to deal with that, all access from C to Lisp objects will go through
+// two levels of pointer dereference. The C local variable is pointing to a
+// pointer on the C stack, and the pointer is pointing to the Lisp object. GC is
+// aware of the pointers in the stack and updates their contents with the
+// objects new addresses when GC happens.
+//
+// The following is a macro to reserve the area in the C stack for the pointers.
+// The contents of this area are considered to be GC root.
+//
+// Be careful not to bypass the two levels of pointer indirection. If you create
+// a direct pointer to an object, it'll cause a subtle bug. Such code would work
+// in most cases but fails with SEGV if GC happens during the execution of the
+// code.
 #define ADD_ROOT(size)                                          \
     Obj * root_ADD_ROOT_[size+3];                               \
     root_ADD_ROOT_[0] = (Obj *)root;                            \
@@ -102,6 +141,7 @@ void print(Obj *obj);
 
 #define NEXT_VAR &root[count_ADD_ROOT_++]
 
+// Allocates memory block. This may start GC if we don't have enough memory.
 Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     size += sizeof(void *);
     if (size % ALIGN != 0)
@@ -115,6 +155,10 @@ Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     obj->type = type;
     return obj;
 }
+
+//======================================================================
+// Constructors
+//======================================================================
 
 Obj *make_int(Env *env, Obj **root, int value) {
     Obj *r = alloc(env, root, TINT, sizeof(int));
@@ -158,13 +202,20 @@ Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **body) {
     return r;
 }
 
-Obj *make_spe(int spetype) {
+Obj *make_special(int subtype) {
     Obj *r = malloc(sizeof(int) * 2);
-    r->type = TSPE;
-    r->spetype = spetype;
+    r->type = TSPECIAL;
+    r->subtype = subtype;
     return r;
 }
 
+//======================================================================
+// Garbage collector
+//======================================================================
+
+// Copies one object from from-space to to-space. Returns the object's new
+// address. If the object has already been moved, does nothing but just returns
+// the new address.
 Obj *copy(Env *env, Obj **root, Obj **obj) {
     Obj *r;
     ptrdiff_t loc = (void *)(*obj) - memory;
@@ -208,7 +259,9 @@ Obj *copy(Env *env, Obj **root, Obj **obj) {
         r = make_function(env, root, (*obj)->type, params, body);
         break;
     }
-    case TSPE:
+    case TSPECIAL:
+        // The special objects are not managed by GC. They are created at the
+        // startup and will never change their addresses.
         return *obj;
     default:
         error("Bug: copy: unknown type %d", (*obj)->type);
@@ -218,6 +271,7 @@ Obj *copy(Env *env, Obj **root, Obj **obj) {
     return r;
 }
 
+// Helper function for debugging.
 void print_cframe(Obj **root) {
     Obj **cframe = root;
     for (;;) {
@@ -237,6 +291,8 @@ void print_cframe(Obj **root) {
     }
 }
 
+// Implements Chensy's copying garbage collection algorithm.
+// http://en.wikipedia.org/wiki/Cheney%27s_algorithm
 void gc(Env *env, Obj **root) {
     if (gc_running)
         error("Bug: GC is already running");
@@ -285,6 +341,15 @@ void gc(Env *env, Obj **root) {
     gc_running = 0;
 }
 
+//======================================================================
+// Parser
+//
+// This is a hand-written recursive-descendent parser.
+//======================================================================
+
+Obj *read(Env *env, Obj **root, char **p);
+Obj *read_one(Env *env, Obj **root, char **p);
+
 void error(char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -294,6 +359,7 @@ void error(char *fmt, ...) {
     exit(1);
 }
 
+// Read one S expression.
 Obj *read_sexp(Env *env, Obj **root, char **p) {
     ADD_ROOT(4);
     Obj **obj = NEXT_VAR;
@@ -330,6 +396,8 @@ Obj *read_sexp(Env *env, Obj **root, char **p) {
     return *head;
 }
 
+// May create a new symbol. If there's a symbol with the same name, it will not
+// create a new symbol but returns the existing one.
 Obj *intern(Env *env, Obj **root, char *name) {
     Obj *old = find(name, env);
     if (old) return old->car;
@@ -420,8 +488,8 @@ Obj *read(Env *env, Obj **root, char **p) {
     }
 }
 
+// Prints the given object.
 void print(Obj *obj) {
-    // if (DEBUG_GC) printf("%p=", obj);
     switch (obj->type) {
     case TMOVED:
         printf("<moved>");
@@ -462,13 +530,13 @@ void print(Obj *obj) {
     case TMACRO:
         printf("<macro>");
         return;
-    case TSPE:
+    case TSPECIAL:
         if (obj == Nil)
             printf("()");
         else if (obj == True)
             printf("t");
         else
-            error("Bug: print: Unknown SPE type: %d", obj->spetype);
+            error("Bug: print: Unknown subtype: %d", obj->subtype);
         return;
     default:
         error("Bug: print: Unknown tag type: %d", obj->type);
@@ -487,6 +555,10 @@ int list_length(Obj *list) {
         len++;
     }
 }
+
+//======================================================================
+// Evaluator
+//======================================================================
 
 Obj *eval(Env *env, Obj **root, Obj **obj);
 
@@ -594,6 +666,7 @@ Obj *find(char *name, Env *env) {
     return NULL;
 }
 
+// Expands the given macro application form.
 Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
@@ -616,10 +689,11 @@ Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
     return progn(&newenv, root, body);
 }
 
+// Evaluates the S expression.
 Obj *eval(Env *env, Obj **root, Obj **obj) {
     if ((*obj)->type == TINT || (*obj)->type == TSTRING ||
         (*obj)->type == TPRIMITIVE || (*obj)->type == TFUNCTION ||
-        (*obj)->type == TSPE)
+        (*obj)->type == TSPECIAL)
         return *obj;
     if ((*obj)->type == TCELL) {
         ADD_ROOT(3);
@@ -643,7 +717,9 @@ Obj *eval(Env *env, Obj **root, Obj **obj) {
     return NULL;
 }
 
-#define BUFSIZE 250
+//======================================================================
+// Functions and special forms
+//======================================================================
 
 Obj *prim_quote(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 1)
@@ -849,6 +925,12 @@ void define_primitives(Env *env, Obj **root) {
     add_primitive(env, root, "exit", prim_exit);
 }
 
+//======================================================================
+// Entry point
+//======================================================================
+
+#define BUFSIZE 250
+
 int main(int argc, char **argv) {
     Obj **root = NULL;
     ADD_ROOT(2);
@@ -860,10 +942,10 @@ int main(int argc, char **argv) {
     if (DEBUG_GC)
         printf("MEMORY: %p + %x\n", memory, MEMORY_SIZE);
 
-    Nil = make_spe(TNIL);
-    Dot = make_spe(TDOT);
-    Cparen = make_spe(TCPAREN);
-    True = make_spe(TTRUE);
+    Nil = make_special(TNIL);
+    Dot = make_special(TDOT);
+    Cparen = make_special(TCPAREN);
+    True = make_special(TTRUE);
 
     Env *env = malloc(sizeof(Env));
     env->vars = Nil;
