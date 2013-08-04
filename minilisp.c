@@ -209,6 +209,14 @@ Obj *make_special(int subtype) {
     return r;
 }
 
+// Returns ((x . y) . a)
+Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
+    ADD_ROOT(1);
+    Obj **cell = NEXT_VAR;
+    *cell = make_cell(env, root, x, y);
+    return make_cell(env, root, cell, a);
+}
+
 //======================================================================
 // Garbage collector
 //======================================================================
@@ -563,13 +571,7 @@ int list_length(Obj *list) {
 Obj *eval(Env *env, Obj **root, Obj **obj);
 
 void add_var_int(Env *env, Obj **root, Obj **sym, Obj **val) {
-    ADD_ROOT(2);
-    Obj **cell = NEXT_VAR;
-    Obj **tmp = NEXT_VAR;
-    *cell = make_cell(env, root, sym, val);
-    *tmp = env->vars;
-    *tmp = make_cell(env, root, cell, tmp);
-    env->vars = *tmp;
+    env->vars = acons(env, root, sym, val, &env->vars);
 }
 
 void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
