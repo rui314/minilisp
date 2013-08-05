@@ -99,12 +99,9 @@ static void *memory;
 static int mem_nused;
 static int gc_running = 0;
 
-// Set true to enable GC debug output
-#ifdef DEBUG_GC
-bool debug_gc = true;
-#else
+// Flags to debug GC.
 bool debug_gc = false;
-#endif
+bool always_gc = false;
 
 void error(char *fmt, ...) __attribute((noreturn));
 Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
@@ -151,16 +148,15 @@ Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     size += sizeof(void *);
     if (size % ALIGN != 0)
         size += ALIGN - (size % ALIGN);
-#ifdef ALWAYS_GC
-    // Allocate a new memory space to force all objects to move. By doing this
-    // all the existing objects' addresses will be invalidated, so if there's a
-    // memory bug that'll cause SEGV relatively soon. This should help debug GC.
-    if (!gc_running)
-      gc(env, root);
-#else
-    if (MEMORY_SIZE < mem_nused + size)
+    if (always_gc) {
+        // Allocate a new memory space to force all objects to move. By doing this
+        // all the existing objects' addresses will be invalidated, so if there's a
+        // memory bug that'll cause SEGV relatively soon. This should help debug GC.
+        if (!gc_running)
+            gc(env, root);
+    } else if (MEMORY_SIZE < mem_nused + size) {
         gc(env, root);
-#endif
+    }
     if (MEMORY_SIZE < mem_nused + size)
         error("memory exhausted");
     Obj *obj = memory + mem_nused;
@@ -941,6 +937,15 @@ void define_primitives(Env *env, Obj **root) {
 }
 
 //======================================================================
+// Debug flags
+//======================================================================
+
+bool getEnvFlag(char *name) {
+    char *val = getenv(name);
+    return val && val[0];
+}
+
+//======================================================================
 // Entry point
 //======================================================================
 
@@ -951,6 +956,9 @@ int main(int argc, char **argv) {
     ADD_ROOT(2);
     Obj **expr = NEXT_VAR;
     Obj **expanded = NEXT_VAR;
+
+    debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
+    always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
 
     memory = mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     mem_nused = 0;

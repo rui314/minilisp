@@ -6,9 +6,7 @@ function fail() {
   exit 1
 }
 
-function run() {
-  echo -n "Testing $1 ... "
-
+function do_run() {
   error=$(echo "$3" | ./minilisp 2>&1 > /dev/null)
   if [ -n "$error" ]; then
     echo FAILED
@@ -20,6 +18,13 @@ function run() {
     echo FAILED
     fail "$2 expected, but got $result"
   fi
+}
+
+function run() {
+  echo -n "Testing $1 ... "
+  # Run the tests twice to test the garbage collector with different settings.
+  MINILISP_ALWAYS_GC= do_run "$@"
+  MINILISP_ALWAYS_GC=1 do_run "$@"
   echo ok
 }
 
