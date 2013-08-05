@@ -138,10 +138,37 @@ static void print(Obj *obj);
     root_ADD_ROOT_[1] = (Obj *)__func__;                        \
     root_ADD_ROOT_[size+2] = (Obj *)-1;                         \
     memset(root_ADD_ROOT_ + 2, 0, sizeof(Obj *) * size);        \
-    root = root_ADD_ROOT_;                                      \
-    int count_ADD_ROOT_ = 2                                     \
+    root = root_ADD_ROOT_
 
-#define NEXT_VAR &root[count_ADD_ROOT_++]
+#define DEFINE1(var1)                           \
+    ADD_ROOT(1);                                \
+    Obj **var1 = &root[2]
+
+#define DEFINE2(var1, var2)                     \
+    ADD_ROOT(2);                                \
+    Obj **var1 = &root[2];                      \
+    Obj **var2 = &root[3]
+
+#define DEFINE3(var1, var2, var3)               \
+    ADD_ROOT(3);                                \
+    Obj **var1 = &root[2];                      \
+    Obj **var2 = &root[3];                      \
+    Obj **var3 = &root[4]
+
+#define DEFINE4(var1, var2, var3, var4)         \
+    ADD_ROOT(4);                                \
+    Obj **var1 = &root[2];                      \
+    Obj **var2 = &root[3];                      \
+    Obj **var3 = &root[4];                      \
+    Obj **var4 = &root[5]
+
+#define DEFINE5(var1, var2, var3, var4, var5)   \
+    ADD_ROOT(5);                                \
+    Obj **var1 = &root[2];                      \
+    Obj **var2 = &root[3];                      \
+    Obj **var3 = &root[4];                      \
+    Obj **var4 = &root[5];                      \
+    Obj **var5 = &root[6]
 
 // Allocates memory block. This may start GC if we don't have enough memory.
 static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
@@ -220,8 +247,7 @@ static Obj *make_special(int subtype) {
 
 // Returns ((x . y) . a)
 static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
-    ADD_ROOT(1);
-    Obj **cell = NEXT_VAR;
+    DEFINE1(cell);
     *cell = make_cell(env, root, x, y);
     return make_cell(env, root, cell, a);
 }
@@ -251,9 +277,7 @@ static Obj *copy(Env *env, Obj **root, Obj **obj) {
         r = make_string(env, root, (*obj)->strbody);
         break;
     case TCELL: {
-        ADD_ROOT(2);
-        Obj **car = NEXT_VAR;
-        Obj **cdr = NEXT_VAR;
+        DEFINE2(car, cdr);
         *car = (*obj)->car;
         *cdr = (*obj)->cdr;
         *car = copy(env, root, car);
@@ -269,9 +293,7 @@ static Obj *copy(Env *env, Obj **root, Obj **obj) {
         break;
     case TFUNCTION:
     case TMACRO: {
-        ADD_ROOT(2);
-        Obj **params = NEXT_VAR;
-        Obj **body = NEXT_VAR;
+        DEFINE2(params, body);
         *params = (*obj)->params;
         *body = (*obj)->body;
         *params = copy(env, root, params);
@@ -381,11 +403,7 @@ static void error(char *fmt, ...) {
 
 // Read one S expression.
 static Obj *read_sexp(Env *env, Obj **root, char **p) {
-    ADD_ROOT(4);
-    Obj **obj = NEXT_VAR;
-    Obj **head = NEXT_VAR;
-    Obj **tail = NEXT_VAR;
-    Obj **tmp = NEXT_VAR;
+    DEFINE4(obj, head, tail, tmp);
     for (;;) {
         *obj = read_one(env, root, p);
         if (!*obj)
@@ -425,9 +443,7 @@ static Obj *intern(Env *env, Obj **root, char *name) {
 }
 
 static Obj *read_quote(Env *env, Obj **root, char **p) {
-    ADD_ROOT(2);
-    Obj **sym = NEXT_VAR;
-    Obj **tmp = NEXT_VAR;
+    DEFINE2(sym, tmp);
     *sym = intern(env, root, "quote");
     *tmp = read(env, root, p);
     *tmp = make_cell(env, root, tmp, &Nil);
@@ -589,27 +605,19 @@ static void add_var_int(Env *env, Obj **root, Obj **sym, Obj **val) {
 static void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
     if (list_length(*vars) != list_length(*values))
         error("cannot apply function: number of argument does not match");
-    ADD_ROOT(6);
-    Obj **p = NEXT_VAR;
-    Obj **q = NEXT_VAR;
-    Obj **sym = NEXT_VAR;
-    Obj **val = NEXT_VAR;
-    Obj **def = NEXT_VAR;
-    Obj **map = NEXT_VAR;
+    DEFINE5(p, q, sym, val, map);
     *map = Nil;
     for (p = vars, q = values; *p != Nil; *p = (*p)->cdr, *q = (*q)->cdr) {
         *val = (*q)->car;
         *sym = (*p)->car;
-        *def = make_cell(env, root, sym, val);
-        *map = make_cell(env, root, def, map);
+        *map = acons(env, root, sym, val, map);
     }
     newenv->vars = *map;
     newenv->next = env;
 }
 
 static Obj *progn(Env *env, Obj **root, Obj **body) {
-    ADD_ROOT(1);
-    Obj **car = NEXT_VAR;
+    DEFINE1(car);
     for (;;) {
         *car = (*body)->car;
         if ((*body)->cdr == Nil)
@@ -620,11 +628,7 @@ static Obj *progn(Env *env, Obj **root, Obj **body) {
 }
 
 static Obj *eval_list(Env *env, Obj **root, Obj **list) {
-    ADD_ROOT(4);
-    Obj **head = NEXT_VAR;
-    Obj **tail = NEXT_VAR;
-    Obj **lp = NEXT_VAR;
-    Obj **tmp = NEXT_VAR;
+    DEFINE4(head, tail, lp, tmp);
     for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
         *tmp = (*lp)->car;
         *tmp = eval(env, root, tmp);
@@ -648,10 +652,7 @@ static Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
         return (*fn)->fn(env, root, args);
     }
     if ((*fn)->type == TFUNCTION) {
-        ADD_ROOT(3);
-        Obj **body = NEXT_VAR;
-        Obj **params = NEXT_VAR;
-        Obj **eargs = NEXT_VAR;
+        DEFINE3(body, params, eargs);
         *body = (*fn)->body;
         *params = (*fn)->params;
         Env newenv;
@@ -679,11 +680,7 @@ static Obj *find(char *name, Env *env) {
 static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
-    ADD_ROOT(4);
-    Obj **macro = NEXT_VAR;
-    Obj **args = NEXT_VAR;
-    Obj **body = NEXT_VAR;
-    Obj **params = NEXT_VAR;
+    DEFINE4(macro, args, body, params);
     *macro = find((*obj)->car->name, env);
     if (!*macro)
         return *obj;
@@ -705,10 +702,7 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
         (*obj)->type == TSPECIAL)
         return *obj;
     if ((*obj)->type == TCELL) {
-        ADD_ROOT(3);
-        Obj **fn = NEXT_VAR;
-        Obj **car = NEXT_VAR;
-        Obj **args = NEXT_VAR;
+        DEFINE3(fn, car, args);
         *car = (*obj)->car;
         *args = (*obj)->cdr;
         *fn = eval(env, root, car);
@@ -744,9 +738,7 @@ static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2 ||
         (*list)->car->type != TSYMBOL)
         error("malformed setq");
-    ADD_ROOT(2);
-    Obj **bind = NEXT_VAR;
-    Obj **value = NEXT_VAR;
+    DEFINE2(bind, value);
     *bind = find((*list)->car->name, env);
     if (!*bind)
         error("unbound variable", (*list)->car->name);
@@ -756,8 +748,7 @@ static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
 }
 
 static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
-    ADD_ROOT(1);
-    Obj **args = NEXT_VAR;
+    DEFINE1(args);
     *args = eval_list(env, root, list);
     int sum = 0;
     for (;;) {
@@ -788,9 +779,7 @@ static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
             error("argument is not a flat list");
         p = p->cdr;
     }
-    ADD_ROOT(2);
-    Obj **car = NEXT_VAR;
-    Obj **cdr = NEXT_VAR;
+    DEFINE2(car, cdr);
     *car = (*list)->car;
     *cdr = (*list)->cdr;
     return make_function(env, root, type, car, cdr);
@@ -804,12 +793,7 @@ static Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
     if ((*list)->car->type != TSYMBOL || (*list)->cdr->type != TCELL) {
         error("malformed defun");
     }
-    ADD_ROOT(5);
-    Obj **fn = NEXT_VAR;
-    Obj **var = NEXT_VAR;
-    Obj **sym = NEXT_VAR;
-    Obj **rest = NEXT_VAR;
-    Obj **tmp = NEXT_VAR;
+    DEFINE5(fn, var, sym, rest, tmp);
     *sym = (*list)->car;
     *rest = (*list)->cdr;
     *fn = handle_function(env, root, rest, type);
@@ -825,9 +809,7 @@ static Obj *prim_define(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2 ||
         (*list)->car->type != TSYMBOL)
         error("malformed setq");
-    ADD_ROOT(2);
-    Obj **sym = NEXT_VAR;
-    Obj **value = NEXT_VAR;
+    DEFINE2(sym, value);
     *sym = (*list)->car;
     *value = (*list)->cdr->car;
     *value = eval(env, root, value);
@@ -842,15 +824,13 @@ static Obj *prim_defmacro(Env *env, Obj **root, Obj **list) {
 static Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 1)
         error("malformed macroexpand");
-    ADD_ROOT(1);
-    Obj **body = NEXT_VAR;
+    DEFINE1(body);
     *body = (*list)->car;
     return macroexpand(env, root, body);
 }
 
 static Obj *prim_println(Env *env, Obj **root, Obj **list) {
-    ADD_ROOT(1);
-    Obj **tmp = NEXT_VAR;
+    DEFINE1(tmp);
     *tmp = (*list)->car;
     *tmp = eval(env, root, tmp);
     print(*tmp);
@@ -862,10 +842,7 @@ static Obj *prim_if(Env *env, Obj **root, Obj **list) {
     int len = list_length(*list);
     if (len < 2)
         error("malformed if");
-    ADD_ROOT(3);
-    Obj **cond = NEXT_VAR;
-    Obj **then = NEXT_VAR;
-    Obj **els = NEXT_VAR;
+    DEFINE3(cond, then, els);
     *cond = (*list)->car;
     *then = (*list)->cdr->car;
     *cond = eval(env, root, cond);
@@ -880,8 +857,7 @@ static Obj *prim_if(Env *env, Obj **root, Obj **list) {
 static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2)
         error("malformed =");
-    ADD_ROOT(1);
-    Obj **values = NEXT_VAR;
+    DEFINE1(values);
     *values = eval_list(env, root, list);
     if ((*values)->car->type != TINT || (*values)->cdr->car->type != TINT)
         error("= only takes number");
@@ -898,17 +874,13 @@ static Obj *prim_exit(Env *env, Obj **root, Obj **list) {
 }
 
 static void add_var(Env *env, Obj **root, char *name, Obj **var) {
-    ADD_ROOT(3);
-    Obj **sym = NEXT_VAR;
-    Obj **cell = NEXT_VAR;
-    Obj **tmp = NEXT_VAR;
+    DEFINE3(sym, cell, tmp);
     *sym = intern(env, root, name);
     add_var_int(env, root, sym, var);
 }
 
 static void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
-    ADD_ROOT(1);
-    Obj **prim = NEXT_VAR;
+    DEFINE1(prim);
     *prim = make_primitive(env, root, fn);
     add_var(env, root, name, prim);
 }
@@ -951,9 +923,7 @@ static bool getEnvFlag(char *name) {
 
 int main(int argc, char **argv) {
     Obj **root = NULL;
-    ADD_ROOT(2);
-    Obj **expr = NEXT_VAR;
-    Obj **expanded = NEXT_VAR;
+    DEFINE2(expr, expanded);
 
     debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
     always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
