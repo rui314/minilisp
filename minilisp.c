@@ -425,7 +425,7 @@ static Obj *intern(Env *env, Obj **root, char *name) {
 }
 
 static Obj *read_quote(Env *env, Obj **root, char **p) {
-    ADD_ROOT(4);
+    ADD_ROOT(2);
     Obj **sym = NEXT_VAR;
     Obj **tmp = NEXT_VAR;
     *sym = intern(env, root, "quote");
@@ -908,7 +908,7 @@ static void add_var(Env *env, Obj **root, char *name, Obj **var) {
 }
 
 static void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
-    ADD_ROOT(4);
+    ADD_ROOT(1);
     Obj **prim = NEXT_VAR;
     *prim = make_primitive(env, root, fn);
     add_var(env, root, name, prim);
