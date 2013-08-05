@@ -604,10 +604,6 @@ void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
     newenv->next = env;
 }
 
-void free_env(Env *env) {
-    free(env);
-}
-
 Obj *progn(Env *env, Obj **root, Obj **body) {
     ADD_ROOT(1);
     Obj **car = NEXT_VAR;
