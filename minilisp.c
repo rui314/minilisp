@@ -100,13 +100,13 @@ static int mem_nused;
 static int gc_running = 0;
 
 // Flags to debug GC.
-bool debug_gc = false;
-bool always_gc = false;
+static bool debug_gc = false;
+static bool always_gc = false;
 
-void error(char *fmt, ...) __attribute((noreturn));
-Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
-void gc(Env *env, Obj **root);
-void print(Obj *obj);
+static void error(char *fmt, ...) __attribute((noreturn));
+static Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
+static void gc(Env *env, Obj **root);
+static void print(Obj *obj);
 
 //======================================================================
 // Memory management
@@ -144,7 +144,7 @@ void print(Obj *obj);
 #define NEXT_VAR &root[count_ADD_ROOT_++]
 
 // Allocates memory block. This may start GC if we don't have enough memory.
-Obj *alloc(Env *env, Obj **root, int type, size_t size) {
+static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     size += sizeof(void *);
     if (size % ALIGN != 0)
         size += ALIGN - (size % ALIGN);
@@ -169,40 +169,40 @@ Obj *alloc(Env *env, Obj **root, int type, size_t size) {
 // Constructors
 //======================================================================
 
-Obj *make_int(Env *env, Obj **root, int value) {
+static Obj *make_int(Env *env, Obj **root, int value) {
     Obj *r = alloc(env, root, TINT, sizeof(int));
     r->value = value;
     return r;
 }
 
-Obj *make_string(Env *env, Obj **root, char *body) {
+static Obj *make_string(Env *env, Obj **root, char *body) {
     Obj *str = alloc(env, root, TSTRING, strlen(body) + 1);
     strcpy(str->strbody, body);
     return str;
 }
 
-Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr) {
+static Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr) {
     Obj *cell = alloc(env, root, TCELL, sizeof(Obj *) * 2);
     cell->car = *car;
     cell->cdr = *cdr;
     return cell;
 }
 
-Obj *find(char *name, Env *env);
+static Obj *find(char *name, Env *env);
 
-Obj *make_symbol(Env *env, Obj **root, char *name) {
+static Obj *make_symbol(Env *env, Obj **root, char *name) {
     Obj *sym = alloc(env, root, TSYMBOL, strlen(name) + 1);
     strcpy(sym->name, name);
     return sym;
 }
 
-Obj *make_primitive(Env *env, Obj **root, Primitive *fn) {
+static Obj *make_primitive(Env *env, Obj **root, Primitive *fn) {
     Obj *r = alloc(env, root, TPRIMITIVE, sizeof(void *));
     r->fn = fn;
     return r;
 }
 
-Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **body) {
+static Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **body) {
     if (type != TFUNCTION && type != TMACRO)
         error("Bug: invalid argument for make_function");
     Obj *r = alloc(env, root, type, sizeof(Obj *) * 2);
@@ -211,7 +211,7 @@ Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **body) {
     return r;
 }
 
-Obj *make_special(int subtype) {
+static Obj *make_special(int subtype) {
     Obj *r = malloc(sizeof(int) * 2);
     r->type = TSPECIAL;
     r->subtype = subtype;
@@ -219,7 +219,7 @@ Obj *make_special(int subtype) {
 }
 
 // Returns ((x . y) . a)
-Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
+static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
     ADD_ROOT(1);
     Obj **cell = NEXT_VAR;
     *cell = make_cell(env, root, x, y);
@@ -233,7 +233,7 @@ Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
 // Copies one object from from-space to to-space. Returns the object's new
 // address. If the object has already been moved, does nothing but just returns
 // the new address.
-Obj *copy(Env *env, Obj **root, Obj **obj) {
+static Obj *copy(Env *env, Obj **root, Obj **obj) {
     Obj *r;
     ptrdiff_t loc = (void *)(*obj) - memory;
     if (0 <= loc && loc < MEMORY_SIZE)
@@ -289,7 +289,7 @@ Obj *copy(Env *env, Obj **root, Obj **obj) {
 }
 
 // Helper function for debugging.
-void print_cframe(Obj **root) {
+static void print_cframe(Obj **root) {
     Obj **cframe = root;
     for (;;) {
         if (!*cframe) break;
@@ -310,7 +310,7 @@ void print_cframe(Obj **root) {
 
 // Implements Chensy's copying garbage collection algorithm.
 // http://en.wikipedia.org/wiki/Cheney%27s_algorithm
-void gc(Env *env, Obj **root) {
+static void gc(Env *env, Obj **root) {
     if (gc_running)
         error("Bug: GC is already running");
     gc_running = 1;
@@ -364,10 +364,10 @@ void gc(Env *env, Obj **root) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
-Obj *read(Env *env, Obj **root, char **p);
-Obj *read_one(Env *env, Obj **root, char **p);
+static Obj *read(Env *env, Obj **root, char **p);
+static Obj *read_one(Env *env, Obj **root, char **p);
 
-void error(char *fmt, ...) {
+static void error(char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -377,7 +377,7 @@ void error(char *fmt, ...) {
 }
 
 // Read one S expression.
-Obj *read_sexp(Env *env, Obj **root, char **p) {
+static Obj *read_sexp(Env *env, Obj **root, char **p) {
     ADD_ROOT(4);
     Obj **obj = NEXT_VAR;
     Obj **head = NEXT_VAR;
@@ -415,13 +415,13 @@ Obj *read_sexp(Env *env, Obj **root, char **p) {
 
 // May create a new symbol. If there's a symbol with the same name, it will not
 // create a new symbol but returns the existing one.
-Obj *intern(Env *env, Obj **root, char *name) {
+static Obj *intern(Env *env, Obj **root, char *name) {
     Obj *old = find(name, env);
     if (old) return old->car;
     return make_symbol(env, root, name);
 }
 
-Obj *read_quote(Env *env, Obj **root, char **p) {
+static Obj *read_quote(Env *env, Obj **root, char **p) {
     ADD_ROOT(4);
     Obj **sym = NEXT_VAR;
     Obj **tmp = NEXT_VAR;
@@ -432,7 +432,7 @@ Obj *read_quote(Env *env, Obj **root, char **p) {
     return *tmp;
 }
 
-Obj *read_number(Env *env, Obj **root, char **p, int val) {
+static Obj *read_number(Env *env, Obj **root, char **p, int val) {
     for (;;) {
         char c = **p;
         switch (c) {
@@ -449,7 +449,7 @@ Obj *read_number(Env *env, Obj **root, char **p, int val) {
 
 #define SYMBOL_MAX_LEN 200
 
-Obj *read_symbol(Env *env, Obj **root, char **p, char c) {
+static Obj *read_symbol(Env *env, Obj **root, char **p, char c) {
     char buf[SYMBOL_MAX_LEN];
     int len = 1;
     buf[0] = c;
@@ -467,7 +467,7 @@ Obj *read_symbol(Env *env, Obj **root, char **p, char c) {
     }
 }
 
-Obj *read_one(Env *env, Obj **root, char **p) {
+static Obj *read_one(Env *env, Obj **root, char **p) {
     switch (**p) {
     case ' ': case '\n': case '\r': case '\t':
         (*p)++;
@@ -483,7 +483,7 @@ Obj *read_one(Env *env, Obj **root, char **p) {
     }
 }
 
-Obj *read(Env *env, Obj **root, char **p) {
+static Obj *read(Env *env, Obj **root, char **p) {
     for (;;) {
         char c = **p;
         (*p)++;
@@ -506,7 +506,7 @@ Obj *read(Env *env, Obj **root, char **p) {
 }
 
 // Prints the given object.
-void print(Obj *obj) {
+static void print(Obj *obj) {
     switch (obj->type) {
     case TMOVED:
         printf("<moved>");
@@ -560,7 +560,7 @@ void print(Obj *obj) {
     }
 }
 
-int list_length(Obj *list) {
+static int list_length(Obj *list) {
     if (list == Nil) return 0;
     int len = 1;
     for (;;) {
@@ -577,13 +577,13 @@ int list_length(Obj *list) {
 // Evaluator
 //======================================================================
 
-Obj *eval(Env *env, Obj **root, Obj **obj);
+static Obj *eval(Env *env, Obj **root, Obj **obj);
 
-void add_var_int(Env *env, Obj **root, Obj **sym, Obj **val) {
+static void add_var_int(Env *env, Obj **root, Obj **sym, Obj **val) {
     env->vars = acons(env, root, sym, val, &env->vars);
 }
 
-void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
+static void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
     if (list_length(*vars) != list_length(*values))
         error("cannot apply function: number of argument does not match");
     ADD_ROOT(6);
@@ -604,7 +604,7 @@ void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
     newenv->next = env;
 }
 
-Obj *progn(Env *env, Obj **root, Obj **body) {
+static Obj *progn(Env *env, Obj **root, Obj **body) {
     ADD_ROOT(1);
     Obj **car = NEXT_VAR;
     for (;;) {
@@ -616,7 +616,7 @@ Obj *progn(Env *env, Obj **root, Obj **body) {
     }
 }
 
-Obj *eval_list(Env *env, Obj **root, Obj **list) {
+static Obj *eval_list(Env *env, Obj **root, Obj **list) {
     ADD_ROOT(4);
     Obj **head = NEXT_VAR;
     Obj **tail = NEXT_VAR;
@@ -638,7 +638,7 @@ Obj *eval_list(Env *env, Obj **root, Obj **list) {
     return *head;
 }
 
-Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
+static Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
     if ((*fn)->type == TPRIMITIVE) {
         if ((*args) != Nil && (*args)->type != TCELL)
             error("argument must be a list");
@@ -660,7 +660,7 @@ Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
     return NULL;
 }
 
-Obj *find(char *name, Env *env) {
+static Obj *find(char *name, Env *env) {
     for (; env; env = env->next) {
         Obj *cell;
         for (cell = env->vars; cell != Nil; cell = cell->cdr) {
@@ -674,7 +674,7 @@ Obj *find(char *name, Env *env) {
 }
 
 // Expands the given macro application form.
-Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
+static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
     ADD_ROOT(4);
@@ -697,7 +697,7 @@ Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
 }
 
 // Evaluates the S expression.
-Obj *eval(Env *env, Obj **root, Obj **obj) {
+static Obj *eval(Env *env, Obj **root, Obj **obj) {
     if ((*obj)->type == TINT || (*obj)->type == TSTRING ||
         (*obj)->type == TPRIMITIVE || (*obj)->type == TFUNCTION ||
         (*obj)->type == TSPECIAL)
@@ -728,17 +728,17 @@ Obj *eval(Env *env, Obj **root, Obj **obj) {
 // Functions and special forms
 //======================================================================
 
-Obj *prim_quote(Env *env, Obj **root, Obj **list) {
+static Obj *prim_quote(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 1)
         error("malformed quote");
     return (*list)->car;
 }
 
-Obj *prim_list(Env *env, Obj **root, Obj **list) {
+static Obj *prim_list(Env *env, Obj **root, Obj **list) {
     return eval_list(env, root, list);
 }
 
-Obj *prim_setq(Env *env, Obj **root, Obj **list) {
+static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2 ||
         (*list)->car->type != TSYMBOL)
         error("malformed setq");
@@ -753,7 +753,7 @@ Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     return (*bind)->cdr;
 }
 
-Obj *prim_plus(Env *env, Obj **root, Obj **list) {
+static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
     ADD_ROOT(1);
     Obj **args = NEXT_VAR;
     *args = eval_list(env, root, list);
@@ -771,7 +771,7 @@ Obj *prim_plus(Env *env, Obj **root, Obj **list) {
     return make_int(env, root, sum);
 }
 
-Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
+static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
     if ((*list)->type != TCELL || (*list)->car->type != TCELL ||
         (*list)->cdr->type != TCELL) {
         error("malformed lambda");
@@ -794,11 +794,11 @@ Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
     return make_function(env, root, type, car, cdr);
 }
 
-Obj *prim_lambda(Env *env, Obj **root, Obj **list) {
+static Obj *prim_lambda(Env *env, Obj **root, Obj **list) {
     return handle_function(env, root, list, TFUNCTION);
 }
 
-Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
+static Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
     if ((*list)->car->type != TSYMBOL || (*list)->cdr->type != TCELL) {
         error("malformed defun");
     }
@@ -815,11 +815,11 @@ Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
     return *fn;
 }
 
-Obj *prim_defun(Env *env, Obj **root, Obj **list) {
+static Obj *prim_defun(Env *env, Obj **root, Obj **list) {
     return handle_defun(env, root, list, TFUNCTION);
 }
 
-Obj *prim_define(Env *env, Obj **root, Obj **list) {
+static Obj *prim_define(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2 ||
         (*list)->car->type != TSYMBOL)
         error("malformed setq");
@@ -833,11 +833,11 @@ Obj *prim_define(Env *env, Obj **root, Obj **list) {
     return *value;
 }
 
-Obj *prim_defmacro(Env *env, Obj **root, Obj **list) {
+static Obj *prim_defmacro(Env *env, Obj **root, Obj **list) {
     return handle_defun(env, root, list, TMACRO);
 }
 
-Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
+static Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 1)
         error("malformed macroexpand");
     ADD_ROOT(1);
@@ -846,7 +846,7 @@ Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
     return macroexpand(env, root, body);
 }
 
-Obj *prim_println(Env *env, Obj **root, Obj **list) {
+static Obj *prim_println(Env *env, Obj **root, Obj **list) {
     ADD_ROOT(1);
     Obj **tmp = NEXT_VAR;
     *tmp = (*list)->car;
@@ -856,7 +856,7 @@ Obj *prim_println(Env *env, Obj **root, Obj **list) {
     return Nil;
 }
 
-Obj *prim_if(Env *env, Obj **root, Obj **list) {
+static Obj *prim_if(Env *env, Obj **root, Obj **list) {
     int len = list_length(*list);
     if (len < 2)
         error("malformed if");
@@ -875,7 +875,7 @@ Obj *prim_if(Env *env, Obj **root, Obj **list) {
         : progn(env, root, els);
 }
 
-Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
+static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2)
         error("malformed =");
     ADD_ROOT(1);
@@ -886,16 +886,16 @@ Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
     return (*values)->car->value == (*values)->cdr->car->value ? True : Nil;
 }
 
-Obj *prim_gc(Env *env, Obj **root, Obj **list) {
+static Obj *prim_gc(Env *env, Obj **root, Obj **list) {
     gc(env, root);
     return Nil;
 }
 
-Obj *prim_exit(Env *env, Obj **root, Obj **list) {
+static Obj *prim_exit(Env *env, Obj **root, Obj **list) {
     exit(0);
 }
 
-void add_var(Env *env, Obj **root, char *name, Obj **var) {
+static void add_var(Env *env, Obj **root, char *name, Obj **var) {
     ADD_ROOT(3);
     Obj **sym = NEXT_VAR;
     Obj **cell = NEXT_VAR;
@@ -904,18 +904,18 @@ void add_var(Env *env, Obj **root, char *name, Obj **var) {
     add_var_int(env, root, sym, var);
 }
 
-void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
+static void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
     ADD_ROOT(4);
     Obj **prim = NEXT_VAR;
     *prim = make_primitive(env, root, fn);
     add_var(env, root, name, prim);
 }
 
-void define_consts(Env *env, Obj **root) {
+static void define_consts(Env *env, Obj **root) {
     add_var(env, root, "t", &True);
 }
 
-void define_primitives(Env *env, Obj **root) {
+static void define_primitives(Env *env, Obj **root) {
     add_primitive(env, root, "quote", prim_quote);
     add_primitive(env, root, "list", prim_list);
     add_primitive(env, root, "setq", prim_setq);
@@ -936,7 +936,7 @@ void define_primitives(Env *env, Obj **root) {
 // Debug flags
 //======================================================================
 
-bool getEnvFlag(char *name) {
+static bool getEnvFlag(char *name) {
     char *val = getenv(name);
     return val && val[0];
 }
