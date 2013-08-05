@@ -151,8 +151,16 @@ Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     size += sizeof(void *);
     if (size % ALIGN != 0)
         size += ALIGN - (size % ALIGN);
+#ifdef ALWAYS_GC
+    // Allocate a new memory space to force all objects to move. By doing this
+    // all the existing objects' addresses will be invalidated, so if there's a
+    // memory bug that'll cause SEGV relatively soon. This should help debug GC.
+    if (!gc_running)
+      gc(env, root);
+#else
     if (MEMORY_SIZE < mem_nused + size)
         gc(env, root);
+#endif
     if (MEMORY_SIZE < mem_nused + size)
         error("memory exhausted");
     Obj *obj = memory + mem_nused;
