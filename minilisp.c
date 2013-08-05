@@ -3,6 +3,7 @@
 #include <alloca.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,7 +100,11 @@ static int mem_nused;
 static int gc_running = 0;
 
 // Set true to enable GC debug output
-#define DEBUG_GC 0
+#ifdef DEBUG_GC
+bool debug_gc = true;
+#else
+bool debug_gc = false;
+#endif
 
 void error(char *fmt, ...) __attribute((noreturn));
 Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
@@ -305,19 +310,19 @@ void gc(Env *env, Obj **root) {
     if (gc_running)
         error("Bug: GC is already running");
     gc_running = 1;
-    if (DEBUG_GC)
+    if (debug_gc)
         fprintf(stderr, "Running GC (%d words used)... ", mem_nused);
     void *old_memory = memory;
     memory = mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     mem_nused = 0;
-    if (DEBUG_GC)
+    if (debug_gc)
         printf("\nMEMORY: %p + %x\n", memory, MEMORY_SIZE);
 
     Env *frame;
     for (frame = env; frame; frame = frame->next)
         frame->vars = copy(env, root, &frame->vars);
 
-    if (DEBUG_GC) print_cframe(root);
+    if (debug_gc) print_cframe(root);
 
     Obj **cframe = root;
     for (;;) {
@@ -325,24 +330,24 @@ void gc(Env *env, Obj **root) {
         Obj **ptr = cframe + 2;
         for (; *ptr != (Obj *)-1; ptr++) {
             if (*ptr) {
-                if (DEBUG_GC) {
+                if (debug_gc) {
                     printf("Copying %p ", *ptr);
                     print(*ptr);
                 }
                 *ptr = copy(env, root, ptr);
-                if (DEBUG_GC) {
+                if (debug_gc) {
                     printf(" -> %p ", *ptr);
                     print(*ptr);
                     printf("\n");
                 }
-            } else if (DEBUG_GC) {
+            } else if (debug_gc) {
                 printf("Skip\n");
             }
         }
         cframe = *(Obj ***)cframe;
     }
     munmap(old_memory, MEMORY_SIZE);
-    if (DEBUG_GC) {
+    if (debug_gc) {
         fprintf(stderr, "done\n");
         fprintf(stderr, "%d bytes copied.\n", mem_nused);
     }
@@ -515,7 +520,7 @@ void print(Obj *obj) {
             if (obj->cdr == Nil) {
                 break;
             }
-            if (obj->cdr->type == TCELL && !DEBUG_GC) {
+            if (obj->cdr->type == TCELL && !debug_gc) {
                 printf(" ");
                 obj = obj->cdr;
                 continue;
@@ -941,7 +946,7 @@ int main(int argc, char **argv) {
 
     memory = mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     mem_nused = 0;
-    if (DEBUG_GC)
+    if (debug_gc)
         printf("MEMORY: %p + %x\n", memory, MEMORY_SIZE);
 
     Nil = make_special(TNIL);
