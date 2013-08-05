@@ -497,7 +497,7 @@ static Obj *read(Env *env, Obj **root, char **p) {
         if (c == '(')
             return read_sexp(env, root, p);
         if (c == ')')
-            error("unclosed open parenthesis");
+            error("stray close parenthesis");
         if (c == '\'')
             return read_quote(env, root, p);
         if (isdigit(c))
