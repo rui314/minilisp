@@ -789,8 +789,8 @@ Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
     ADD_ROOT(2);
     Obj **car = NEXT_VAR;
     Obj **cdr = NEXT_VAR;
-    car = &(*list)->car;
-    cdr = &(*list)->cdr;
+    *car = (*list)->car;
+    *cdr = (*list)->cdr;
     return make_function(env, root, type, car, cdr);
 }
 
