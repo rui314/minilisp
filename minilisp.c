@@ -790,7 +790,7 @@ Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
 }
 
 Obj *prim_lambda(Env *env, Obj **root, Obj **list) {
-    handle_function(env, root, list, TFUNCTION);
+    return handle_function(env, root, list, TFUNCTION);
 }
 
 Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
