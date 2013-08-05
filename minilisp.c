@@ -660,7 +660,6 @@ static Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
         return progn(&newenv, root, body);
     }
     error("not supported");
-    return NULL;
 }
 
 static Obj *find(char *name, Env *env) {
