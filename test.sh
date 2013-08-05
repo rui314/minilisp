@@ -59,3 +59,6 @@ run macro 42 "
 run macroexpand '(quote (if-zero x (print x)))' "
   (defmacro if-zero (x then) (list 'if (list '= x 0) then))
   (macroexpand '(if-zero x (print x)))"
+
+# Sum from 0 to 10
+run recursion 55 '(defun f (x) (if (= x 11) 0 (+ (f (+ x 1)) x))) (f 0)'
