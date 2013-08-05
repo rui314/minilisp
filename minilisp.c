@@ -873,7 +873,7 @@ static Obj *prim_exit(Env *env, Obj **root, Obj **list) {
 }
 
 static void add_var(Env *env, Obj **root, char *name, Obj **var) {
-    DEFINE3(sym, cell, tmp);
+    DEFINE1(sym);
     *sym = intern(env, root, name);
     add_var_int(env, root, sym, var);
 }
