@@ -120,7 +120,7 @@ static void print(Obj *obj);
 // the code which may invoke GC.
 //
 // In order to deal with that, all access from C to Lisp objects will go through
-// two levels of pointer dereference. The C local variable is pointing to a
+// two levels of pointer dereferences. The C local variable is pointing to a
 // pointer on the C stack, and the pointer is pointing to the Lisp object. GC is
 // aware of the pointers in the stack and updates their contents with the
 // objects new addresses when GC happens.
@@ -128,10 +128,10 @@ static void print(Obj *obj);
 // The following is a macro to reserve the area in the C stack for the pointers.
 // The contents of this area are considered to be GC root.
 //
-// Be careful not to bypass the two levels of pointer indirection. If you create
-// a direct pointer to an object, it'll cause a subtle bug. Such code would work
-// in most cases but fails with SEGV if GC happens during the execution of the
-// code.
+// Be careful not to bypass the two levels of pointer indirections. If you
+// create a direct pointer to an object, it'll cause a subtle bug. Such code
+// would work in most cases but fails with SEGV if GC happens during the
+// execution of the code.
 #define ADD_ROOT(size)                                          \
     Obj * root_ADD_ROOT_[size+3];                               \
     root_ADD_ROOT_[0] = (Obj *)root;                            \
@@ -235,9 +235,12 @@ static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
 // the new address.
 static Obj *copy(Env *env, Obj **root, Obj **obj) {
     Obj *r;
+
+    // If the object is already in the to-space, it's already moved.
     ptrdiff_t loc = (void *)(*obj) - memory;
     if (0 <= loc && loc < MEMORY_SIZE)
         return *obj;
+
     switch ((*obj)->type) {
     case TMOVED:
         return (*obj)->moved;
@@ -308,7 +311,7 @@ static void print_cframe(Obj **root) {
     }
 }
 
-// Implements Chensy's copying garbage collection algorithm.
+// Implements Cheney's copying garbage collection algorithm.
 // http://en.wikipedia.org/wiki/Cheney%27s_algorithm
 static void gc(Env *env, Obj **root) {
     if (gc_running)
