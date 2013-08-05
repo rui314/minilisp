@@ -806,8 +806,7 @@ static Obj *prim_defun(Env *env, Obj **root, Obj **list) {
 }
 
 static Obj *prim_define(Env *env, Obj **root, Obj **list) {
-    if (list_length(*list) != 2 ||
-        (*list)->car->type != TSYMBOL)
+    if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("malformed setq");
     DEFINE2(sym, value);
     *sym = (*list)->car;
