@@ -100,8 +100,8 @@ static Obj *Symbols;
 #define ALIGN 16
 
 static void *memory;
-static int mem_nused;
-static int gc_running = 0;
+static size_t mem_nused;
+static bool gc_running = false;
 
 // Flags to debug GC.
 static bool debug_gc = false;
@@ -332,9 +332,9 @@ void *alloc_semispace() {
 static void gc(Env *env, Obj **root) {
     if (gc_running)
         error("Bug: GC is already running");
-    gc_running = 1;
+    gc_running = true;
     if (debug_gc)
-        fprintf(stderr, "Running GC (%d words used)... ", mem_nused);
+        fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
     void *old_memory = memory;
     memory = alloc_semispace();
     mem_nused = 0;
@@ -371,9 +371,9 @@ static void gc(Env *env, Obj **root) {
     munmap(old_memory, MEMORY_SIZE);
     if (debug_gc) {
         fprintf(stderr, "done\n");
-        fprintf(stderr, "%d bytes copied.\n", mem_nused);
+        fprintf(stderr, "%lu bytes copied.\n", mem_nused);
     }
-    gc_running = 0;
+    gc_running = false;
 }
 
 //======================================================================
@@ -719,7 +719,7 @@ static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     DEFINE2(bind, value);
     *bind = find((*list)->car->name, env);
     if (!*bind)
-        error("unbound variable", (*list)->car->name);
+        error("unbound variable %s", (*list)->car->name);
     *value = (*list)->cdr->car;
     (*bind)->cdr = eval(env, root, value);
     return (*bind)->cdr;
