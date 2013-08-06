@@ -137,7 +137,7 @@ static void print(Obj *obj);
 // would work in most cases but fails with SEGV if GC happens during the
 // execution of the code.
 #define ADD_ROOT(size)                                          \
-    Obj * root_ADD_ROOT_[size+3];                               \
+    Obj *root_ADD_ROOT_[size+3];                                \
     root_ADD_ROOT_[0] = (Obj *)root;                            \
     root_ADD_ROOT_[1] = (Obj *)__func__;                        \
     root_ADD_ROOT_[size+2] = (Obj *)-1;                         \
@@ -581,7 +581,7 @@ static void add_variable(Env *env, Obj **root, Obj **sym, Obj **val) {
     env->vars = acons(env, root, sym, val, &env->vars);
 }
 
-static void add_env(Env *env, Obj **root,  Env *newenv, Obj **vars, Obj **values) {
+static void add_env(Env *env, Obj **root, Env *newenv, Obj **vars, Obj **values) {
     if (list_length(*vars) != list_length(*values))
         error("cannot apply function: number of argument does not match");
     DEFINE5(p, q, sym, val, map);
@@ -713,8 +713,7 @@ static Obj *prim_list(Env *env, Obj **root, Obj **list) {
 }
 
 static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
-    if (list_length(*list) != 2 ||
-        (*list)->car->type != TSYMBOL)
+    if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("malformed setq");
     DEFINE2(bind, value);
     *bind = find((*list)->car->name, env);
@@ -805,8 +804,7 @@ static Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
 static Obj *prim_println(Env *env, Obj **root, Obj **list) {
     DEFINE1(tmp);
     *tmp = (*list)->car;
-    *tmp = eval(env, root, tmp);
-    print(*tmp);
+    print(eval(env, root, tmp));
     printf("\n");
     return Nil;
 }
