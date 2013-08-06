@@ -695,7 +695,6 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
         return val->cdr;
     }
     error("BUG: eval: Unknown tag type: %d", (*obj)->type);
-    return NULL;
 }
 
 //======================================================================
@@ -830,9 +829,11 @@ static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
         error("malformed =");
     DEFINE1(values);
     *values = eval_list(env, root, list);
-    if ((*values)->car->type != TINT || (*values)->cdr->car->type != TINT)
+    Obj *x = (*values)->car;
+    Obj *y = (*values)->cdr->car;
+    if (x->type != TINT || y->type != TINT)
         error("= only takes number");
-    return (*values)->car->value == (*values)->cdr->car->value ? True : Nil;
+    return x->value == y->value ? True : Nil;
 }
 
 static Obj *prim_gc(Env *env, Obj **root, Obj **list) {
