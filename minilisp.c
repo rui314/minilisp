@@ -719,8 +719,9 @@ static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     if (!*bind)
         error("unbound variable %s", (*list)->car->name);
     *value = (*list)->cdr->car;
-    (*bind)->cdr = eval(env, root, value);
-    return (*bind)->cdr;
+    *value = eval(env, root, value);
+    (*bind)->cdr = *value;
+    return *value;
 }
 
 static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
