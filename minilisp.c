@@ -329,6 +329,10 @@ static void print_cframe(Obj **root) {
     }
 }
 
+void *alloc_semispace() {
+  return mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+}
+
 // Implements Cheney's copying garbage collection algorithm.
 // http://en.wikipedia.org/wiki/Cheney%27s_algorithm
 static void gc(Env *env, Obj **root) {
@@ -338,7 +342,7 @@ static void gc(Env *env, Obj **root) {
     if (debug_gc)
         fprintf(stderr, "Running GC (%d words used)... ", mem_nused);
     void *old_memory = memory;
-    memory = mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    memory = alloc_semispace();
     mem_nused = 0;
     if (debug_gc)
         printf("\nMEMORY: %p + %x\n", memory, MEMORY_SIZE);
@@ -880,58 +884,53 @@ static void define_primitives(Env *env, Obj **root) {
 }
 
 //======================================================================
-// Debug flags
+// Entry point
 //======================================================================
+
+#define BUFSIZE 250
 
 static bool getEnvFlag(char *name) {
     char *val = getenv(name);
     return val && val[0];
 }
 
-//======================================================================
-// Entry point
-//======================================================================
-
-#define BUFSIZE 250
-
 int main(int argc, char **argv) {
-    Obj **root = NULL;
-    DEFINE2(expr, expanded);
-
+    // Debug flags
     debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
     always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
 
-    memory = mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    // Memory allocation
+    memory = alloc_semispace();
     mem_nused = 0;
     if (debug_gc)
         printf("MEMORY: %p + %x\n", memory, MEMORY_SIZE);
 
+    // Constants and primitives
     Nil = make_special(TNIL);
     Dot = make_special(TDOT);
     Cparen = make_special(TCPAREN);
     True = make_special(TTRUE);
 
-    Env *env = malloc(sizeof(Env));
-    env->vars = Nil;
-    env->next = NULL;
+    Obj **root = NULL;
+    Env env = { Nil, NULL };
+    DEFINE2(expr, expanded);
 
-    define_consts(env, root);
-    define_primitives(env, root);
+    define_consts(&env, root);
+    define_primitives(&env, root);
 
-    mem_nused = MEMORY_SIZE - sizeof(void *) * 32;
-
+    // The main loop
     char buf[BUFSIZE];
     for (;;) {
         char *p = buf;
         if (!fgets(p, BUFSIZE, stdin))
           return 0;
         for (;;) {
-          *expr = read(env, root, &p);
-          if (!*expr) break;
-          *expanded = macroexpand(env, root, expr);
-          print(eval(env, root, expanded));
+          *expr = read(&env, root, &p);
+          if (!*expr)
+              break;
+          *expanded = macroexpand(&env, root, expr);
+          print(eval(&env, root, expanded));
           printf("\n");
         }
     }
-    return 0;
 }
