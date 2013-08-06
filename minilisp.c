@@ -592,7 +592,7 @@ static int list_length(Obj *list) {
 
 static Obj *eval(Env *env, Obj **root, Obj **obj);
 
-static void add_var_int(Env *env, Obj **root, Obj **sym, Obj **val) {
+static void add_variable(Env *env, Obj **root, Obj **sym, Obj **val) {
     env->vars = acons(env, root, sym, val, &env->vars);
 }
 
@@ -787,7 +787,7 @@ static Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
     *sym = (*list)->car;
     *rest = (*list)->cdr;
     *fn = handle_function(env, root, rest, type);
-    add_var_int(env, root, sym, fn);
+    add_variable(env, root, sym, fn);
     return *fn;
 }
 
@@ -802,7 +802,7 @@ static Obj *prim_define(Env *env, Obj **root, Obj **list) {
     *sym = (*list)->car;
     *value = (*list)->cdr->car;
     *value = eval(env, root, value);
-    add_var_int(env, root, sym, value);
+    add_variable(env, root, sym, value);
     return *value;
 }
 
@@ -862,20 +862,17 @@ static Obj *prim_exit(Env *env, Obj **root, Obj **list) {
     exit(0);
 }
 
-static void add_var(Env *env, Obj **root, char *name, Obj **var) {
-    DEFINE1(sym);
-    *sym = intern(env, root, name);
-    add_var_int(env, root, sym, var);
-}
-
 static void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
-    DEFINE1(prim);
+    DEFINE2(prim, sym);
     *prim = make_primitive(env, root, fn);
-    add_var(env, root, name, prim);
+    *sym = intern(env, root, name);
+    add_variable(env, root, sym, prim);
 }
 
 static void define_consts(Env *env, Obj **root) {
-    add_var(env, root, "t", &True);
+    DEFINE1(sym);
+    *sym = intern(env, root, "t");
+    add_variable(env, root, sym, &True);
 }
 
 static void define_primitives(Env *env, Obj **root) {
