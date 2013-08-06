@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -178,7 +179,8 @@ static void print(Obj *obj);
 
 // Allocates memory block. This may start GC if we don't have enough memory.
 static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
-    size += sizeof(void *);
+    // Add the size of the type tag field
+    size += offsetof(Obj, value);
     if (size % ALIGN != 0)
         size += ALIGN - (size % ALIGN);
     if (always_gc) {
@@ -243,7 +245,7 @@ static Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **bo
 }
 
 static Obj *make_special(int subtype) {
-    Obj *r = malloc(sizeof(int) * 2);
+    Obj *r = malloc(sizeof(void *) * 2);
     r->type = TSPECIAL;
     r->subtype = subtype;
     return r;
