@@ -19,7 +19,6 @@
 enum {
     // Regular objects visible from the user.
     TINT = 1,
-    TSTRING,
     TCELL,
     TSYMBOL,
     TPRIMITIVE,
@@ -62,8 +61,6 @@ typedef struct Obj {
     union {
         // Int
         int value;
-        // String
-        char strbody[1];
         // Cell
         struct {
             struct Obj *car;
@@ -210,12 +207,6 @@ static Obj *make_int(Env *env, Obj **root, int value) {
     return r;
 }
 
-static Obj *make_string(Env *env, Obj **root, char *body) {
-    Obj *str = alloc(env, root, TSTRING, strlen(body) + 1);
-    strcpy(str->strbody, body);
-    return str;
-}
-
 static Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr) {
     Obj *cell = alloc(env, root, TCELL, sizeof(Obj *) * 2);
     cell->car = *car;
@@ -278,9 +269,6 @@ static Obj *copy(Env *env, Obj **root, Obj **obj) {
         return (*obj)->moved;
     case TINT:
         r = make_int(env, root, (*obj)->value);
-        break;
-    case TSTRING:
-        r = make_string(env, root, (*obj)->strbody);
         break;
     case TCELL: {
         DEFINE2(car, cdr);
@@ -527,9 +515,6 @@ static void print(Obj *obj) {
     case TINT:
         printf("%d", obj->value);
         return;
-    case TSTRING:
-        printf("%s", obj->strbody);
-        return;
     case TCELL:
         printf("(");
         for (;;) {
@@ -691,9 +676,8 @@ static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
 
 // Evaluates the S expression.
 static Obj *eval(Env *env, Obj **root, Obj **obj) {
-    if ((*obj)->type == TINT || (*obj)->type == TSTRING ||
-        (*obj)->type == TPRIMITIVE || (*obj)->type == TFUNCTION ||
-        (*obj)->type == TSPECIAL)
+    if ((*obj)->type == TINT || (*obj)->type == TPRIMITIVE ||
+        (*obj)->type == TFUNCTION || (*obj)->type == TSPECIAL)
         return *obj;
     if ((*obj)->type == TCELL) {
         DEFINE3(fn, car, args);
