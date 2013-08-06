@@ -315,21 +315,17 @@ static Obj *copy(Env *env, Obj **root, Obj **obj) {
 
 // Helper function for debugging.
 static void print_cframe(Obj **root) {
-    Obj **cframe = root;
-    for (;;) {
-        if (!*cframe) break;
+    for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe) {
         Obj **ptr = cframe + 2;
         printf(" %s: ", (char *)cframe[1]);
         for (; *ptr != (Obj *)-1; ptr++) {
-            if (*ptr) {
+            if (*ptr)
                 print(*ptr);
-            } else {
+            else
                 printf("- ");
-            }
             printf(" ");
         }
         printf("\n");
-        cframe = *(Obj ***)cframe;
     }
 }
 
@@ -347,33 +343,30 @@ static void gc(Env *env, Obj **root) {
     if (debug_gc)
         printf("\nMEMORY: %p + %x\n", memory, MEMORY_SIZE);
 
-    Env *frame;
-    for (frame = env; frame; frame = frame->next)
+    for (Env *frame = env; frame; frame = frame->next)
         frame->vars = copy(env, root, &frame->vars);
 
     if (debug_gc) print_cframe(root);
 
-    Obj **cframe = root;
-    for (;;) {
-        if (!*cframe) break;
+    for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe) {
         Obj **ptr = cframe + 2;
         for (; *ptr != (Obj *)-1; ptr++) {
-            if (*ptr) {
-                if (debug_gc) {
-                    printf("Copying %p ", *ptr);
-                    print(*ptr);
-                }
-                *ptr = copy(env, root, ptr);
-                if (debug_gc) {
-                    printf(" -> %p ", *ptr);
-                    print(*ptr);
-                    printf("\n");
-                }
-            } else if (debug_gc) {
-                printf("Skip\n");
+            if (!*ptr) {
+                if (debug_gc)
+                    printf("Skip\n");
+                continue;
+            }
+            if (debug_gc) {
+                printf("Copying %p ", *ptr);
+                print(*ptr);
+            }
+            *ptr = copy(env, root, ptr);
+            if (debug_gc) {
+                printf(" -> %p ", *ptr);
+                print(*ptr);
+                printf("\n");
             }
         }
-        cframe = *(Obj ***)cframe;
     }
     munmap(old_memory, MEMORY_SIZE);
     if (debug_gc) {
@@ -401,37 +394,36 @@ static void error(char *fmt, ...) {
     exit(1);
 }
 
-// Read one S expression.
-static Obj *read_sexp(Env *env, Obj **root, char **p) {
+// Read a list. Note that '(' has already been read.
+static Obj *read_list(Env *env, Obj **root, char **p) {
     DEFINE4(obj, head, tail, tmp);
+    *obj = read_one(env, root, p);
+    if (!*obj)
+        error("unclosed parenthesis");
+    if (*obj == Dot)
+        error("stray dot");
+    if (*obj == Cparen)
+        return Nil;
+    (*head) = (*tail) = make_cell(env, root, obj, &Nil);
+
     for (;;) {
         *obj = read_one(env, root, p);
         if (!*obj)
             error("unclosed parenthesis");
+        if (*obj == Cparen)
+            return *head;
         if (*obj == Dot) {
-            if (*head == NULL)
-                error("stray dot");
             *tmp = read_one(env, root, p);
             (*tail)->cdr = *tmp;
             *obj = read_one(env, root, p);
             if (*obj != Cparen)
               error("Closed parenthesis expected after dot");
-            break;
+            return *head;
         }
-        if (*obj == Cparen) {
-            if (*head == NULL)
-                return Nil;
-            break;
-        }
-        if (*head == NULL) {
-            (*head) = (*tail) = make_cell(env, root, obj, &Nil);
-        } else {
-            *tmp = make_cell(env, root, obj, &Nil);
-            (*tail)->cdr = *tmp;
-            (*tail) = (*tail)->cdr;
-        }
+        *tmp = make_cell(env, root, obj, &Nil);
+        (*tail)->cdr = *tmp;
+        (*tail) = (*tail)->cdr;
     }
-    return *head;
 }
 
 // May create a new symbol. If there's a symbol with the same name, it will not
@@ -452,18 +444,9 @@ static Obj *read_quote(Env *env, Obj **root, char **p) {
 }
 
 static Obj *read_number(Env *env, Obj **root, char **p, int val) {
-    for (;;) {
-        char c = **p;
-        switch (c) {
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-            (*p)++;
-            val = val * 10 + (c - '0');
-            break;
-        default:
-            return make_int(env, root, val);
-        }
-    }
+    for (; isdigit(**p); (*p)++)
+        val = val * 10 + (**p - '0');
+    return make_int(env, root, val);
 }
 
 #define SYMBOL_MAX_LEN 200
@@ -472,18 +455,13 @@ static Obj *read_symbol(Env *env, Obj **root, char **p, char c) {
     char buf[SYMBOL_MAX_LEN];
     int len = 1;
     buf[0] = c;
-    for (;;) {
-        char c = **p;
-        if (isalnum(c) || c == '-') {
-            if (SYMBOL_MAX_LEN + 1 < len)
-                error("symbol name too long");
-            (*p)++;
-            buf[len++] = c;
-            continue;
-        }
-        buf[len] = '\0';
-        return intern(env, root, buf);
+    for (; isalnum(**p) || **p == '-'; (*p)++) {
+        if (SYMBOL_MAX_LEN + 1 < len)
+            error("symbol name too long");
+        buf[len++] = **p;
     }
+    buf[len] = '\0';
+    return intern(env, root, buf);
 }
 
 static Obj *read_one(Env *env, Obj **root, char **p) {
@@ -511,7 +489,7 @@ static Obj *read(Env *env, Obj **root, char **p) {
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t')
             continue;
         if (c == '(')
-            return read_sexp(env, root, p);
+            return read_list(env, root, p);
         if (c == ')')
             error("stray close parenthesis");
         if (c == '\'')
@@ -769,15 +747,11 @@ static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
         (*list)->cdr->type != TCELL) {
         error("malformed lambda");
     }
-    Obj *p = (*list)->car;
-    for (;;) {
+    for (Obj *p = (*list)->car; p->cdr != Nil; p = p->cdr) {
         if (p->car->type != TSYMBOL)
             error("argument must be a symbol");
-        if (p->cdr == Nil)
-            break;
         if (p->cdr->type != TCELL)
             error("argument is not a flat list");
-        p = p->cdr;
     }
     DEFINE2(car, cdr);
     *car = (*list)->car;
