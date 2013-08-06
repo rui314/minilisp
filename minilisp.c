@@ -869,7 +869,7 @@ static void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
     add_variable(env, root, sym, prim);
 }
 
-static void define_consts(Env *env, Obj **root) {
+static void define_constants(Env *env, Obj **root) {
     DEFINE1(sym);
     *sym = intern(env, root, "t");
     add_variable(env, root, sym, &True);
@@ -925,7 +925,7 @@ int main(int argc, char **argv) {
     Env env = { Nil, NULL };
     DEFINE2(expr, expanded);
 
-    define_consts(&env, root);
+    define_constants(&env, root);
     define_primitives(&env, root);
 
     // The main loop
