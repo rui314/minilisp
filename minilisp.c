@@ -108,7 +108,6 @@ static bool debug_gc = false;
 static bool always_gc = false;
 
 static void error(char *fmt, ...) __attribute((noreturn));
-static Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr);
 static void gc(Env *env, Obj **root);
 static void print(Obj *obj);
 
