@@ -84,10 +84,16 @@ typedef struct Obj {
     };
 } Obj;
 
+// Constants.
 static Obj *Nil;
 static Obj *Dot;
 static Obj *Cparen;
 static Obj *True;
+
+// The list containing all symbols. Such data structure is traditionally called
+// the "obarray", but I avoid using it as a variable name as this is not an
+// array but a list.
+static Obj *Symbols;
 
 // The size of the heap in byte.
 #define MEMORY_SIZE 4096
@@ -214,8 +220,6 @@ static Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr) {
     cell->cdr = *cdr;
     return cell;
 }
-
-static Obj *find(char *name, Env *env);
 
 static Obj *make_symbol(Env *env, Obj **root, char *name) {
     Obj *sym = alloc(env, root, TSYMBOL, strlen(name) + 1);
@@ -349,8 +353,10 @@ static void gc(Env *env, Obj **root) {
 
     for (Env *frame = env; frame; frame = frame->next)
         frame->vars = copy(env, root, &frame->vars);
+    Symbols = copy(env, root, &Symbols);
 
-    if (debug_gc) print_cframe(root);
+    if (debug_gc)
+        print_cframe(root);
 
     for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe) {
         Obj **ptr = cframe + 2;
@@ -433,9 +439,13 @@ static Obj *read_list(Env *env, Obj **root, char **p) {
 // May create a new symbol. If there's a symbol with the same name, it will not
 // create a new symbol but returns the existing one.
 static Obj *intern(Env *env, Obj **root, char *name) {
-    Obj *old = find(name, env);
-    if (old) return old->car;
-    return make_symbol(env, root, name);
+    for (Obj *p = Symbols; p != Nil; p = p->cdr)
+        if (strcmp(name, p->car->name) == 0)
+            return p->car;
+    DEFINE1(sym);
+    *sym = make_symbol(env, root, name);
+    Symbols = make_cell(env, root, sym, &Symbols);
+    return *sym;
 }
 
 static Obj *read_quote(Env *env, Obj **root, char **p) {
@@ -910,6 +920,7 @@ int main(int argc, char **argv) {
     Dot = make_special(TDOT);
     Cparen = make_special(TCPAREN);
     True = make_special(TTRUE);
+    Symbols = Nil;
 
     Obj **root = NULL;
     Env env = { Nil, NULL };
