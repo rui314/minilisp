@@ -57,6 +57,10 @@ typedef struct Obj {
     // following union members.
     int type;
 
+    // The total size of the object, including "type" field, this field, the
+    // contents, and the padding at the end of the object.
+    int size;
+
     // Object values.
     union {
         // Int
@@ -115,18 +119,18 @@ static void print(Obj *obj);
 // Memory management
 //======================================================================
 
-// Currently we are using Cheney's copying GC algorithm, which splits the
-// available memory space into two halves and moves all objects from one half to
-// another every time GC is invoked. That means the address of the object keeps
-// changing. You cannot take the address of an object and keep it in a C
-// variable because the address will soon become invalid if there's a path to
-// the code which may invoke GC.
+// Currently we are using Cheney's copying GC algorithm, with which the
+// available memory is split into two halves and all objects are moved from one
+// half to another every time GC is invoked. That means the address of the
+// object keeps changing. If you take the address of an object and keep it in a
+// C variable, dereferencing it could cause SEGV because the address becomes
+// invalid after GC runs.
 //
 // In order to deal with that, all access from C to Lisp objects will go through
 // two levels of pointer dereferences. The C local variable is pointing to a
 // pointer on the C stack, and the pointer is pointing to the Lisp object. GC is
 // aware of the pointers in the stack and updates their contents with the
-// objects new addresses when GC happens.
+// objects' new addresses when GC happens.
 //
 // The following is a macro to reserve the area in the C stack for the pointers.
 // The contents of this area are considered to be GC root.
@@ -134,7 +138,8 @@ static void print(Obj *obj);
 // Be careful not to bypass the two levels of pointer indirections. If you
 // create a direct pointer to an object, it'll cause a subtle bug. Such code
 // would work in most cases but fails with SEGV if GC happens during the
-// execution of the code.
+// execution of the code. Any code that allocates memory may invoke GC.
+
 #define ADD_ROOT(size)                                          \
     Obj *root_ADD_ROOT_[size+3];                                \
     root_ADD_ROOT_[0] = (Obj *)root;                            \
@@ -175,24 +180,34 @@ static void print(Obj *obj);
 
 // Allocates memory block. This may start GC if we don't have enough memory.
 static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
-    // Add the size of the type tag field
+    // Add the size of the type tag and size fields.
     size += offsetof(Obj, value);
     if (size % ALIGN != 0)
         size += ALIGN - (size % ALIGN);
-    if (always_gc) {
-        // Allocate a new memory space to force all objects to move. By doing this
-        // all the existing objects' addresses will be invalidated, so if there's a
-        // memory bug that'll cause SEGV relatively soon. This should help debug GC.
-        if (!gc_running)
-            gc(env, root);
-    } else if (MEMORY_SIZE < mem_nused + size) {
+
+    // If the debug flag is on, allocate a new memory space to force all the
+    // existing objects to move to new addresses, to invalidate the old
+    // addresses. By doing this the GC behavior becomes more predictable and
+    // repeatable. If there's a memory bug that the C variable has a direct
+    // reference to a Lisp object, the pointer will become invalid by this GC
+    // call. Dereferencing that will immediately causes SEGV.
+    if (always_gc && !gc_running)
         gc(env, root);
-    }
+
+    // Otherwise, run GC only only when the available memory is not large enough.
+    if (!always_gc && MEMORY_SIZE < mem_nused + size)
+        gc(env, root);
+
+    // Terminate the program if we couldn't satisfy the memory request. This can
+    // happen if the requested size was too large or the from-space was filled
+    // with too many live objects.
     if (MEMORY_SIZE < mem_nused + size)
         error("memory exhausted");
+
     Obj *obj = memory + mem_nused;
     mem_nused += size;
     obj->type = type;
+    obj->size = size;
     return obj;
 }
 
@@ -252,78 +267,62 @@ static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
 // Garbage collector
 //======================================================================
 
-// Copies one object from from-space to to-space. Returns the object's new
-// address. If the object has already been moved, does nothing but just returns
-// the new address.
-static Obj *copy(Env *env, Obj **root, Obj **obj) {
-    Obj *r;
+// Cheney's algorithm uses two pointers to keep track of GC status. At first
+// both pointers point to the beginning of the to-space. As GC progresses, they
+// are moved towards the end of the to-space. The objects before "scan1" are the
+// objects that are fully copied. The objects between "scan1" and "scan2" have
+// already been copied, but may contain pointers to the from-space. "scan2"
+// points to the beginning of the free space.
+Obj *scan1;
+Obj *scan2;
 
-    // If the object is already in the to-space, it's already moved.
-    ptrdiff_t loc = (void *)(*obj) - memory;
-    if (0 <= loc && loc < MEMORY_SIZE)
-        return *obj;
+// Copies one object from the from-space to the to-space. Returns the object's
+// new address. If the object has already been moved, does nothing but just
+// returns the new address.
+static Obj *forward(Obj *obj) {
+    // The object of type TSPECIAL is not managed by GC and will never be
+    // copied.
+    if (obj->type == TSPECIAL)
+        return obj;
 
-    switch ((*obj)->type) {
-    case TMOVED:
-        return (*obj)->moved;
-    case TINT:
-        r = make_int(env, root, (*obj)->value);
-        break;
-    case TCELL: {
-        DEFINE2(car, cdr);
-        *car = (*obj)->car;
-        *cdr = (*obj)->cdr;
-        *car = copy(env, root, car);
-        *cdr = copy(env, root, cdr);
-        r = make_cell(env, root, car, cdr);
-        break;
-    }
-    case TSYMBOL:
-        r = make_symbol(env, root, (*obj)->name);
-        break;
-    case TPRIMITIVE:
-        r = make_primitive(env, root, (*obj)->fn);
-        break;
-    case TFUNCTION:
-    case TMACRO: {
-        DEFINE2(params, body);
-        *params = (*obj)->params;
-        *body = (*obj)->body;
-        *params = copy(env, root, params);
-        *body = copy(env, root, body);
-        r = make_function(env, root, (*obj)->type, params, body);
-        break;
-    }
-    case TSPECIAL:
-        // The special objects are not managed by GC. They are created at the
-        // startup and will never change their addresses.
-        return *obj;
-    default:
-        error("Bug: copy: unknown type %d", (*obj)->type);
-    }
-    (*obj)->type = TMOVED;
-    (*obj)->moved = r;
-    return r;
-}
+    // If the object's address is in the to-space, the object has already been
+    // moved.
+    ptrdiff_t offset = (void *)obj - memory;
+    if (0 <= offset && offset < MEMORY_SIZE)
+        return obj;
 
-// Helper function for debugging.
-static void print_cframe(Obj **root) {
-    for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe) {
-        Obj **ptr = cframe + 2;
-        printf(" %s: ", (char *)cframe[1]);
-        for (; *ptr != (Obj *)-1; ptr++) {
-            if (*ptr)
-                print(*ptr);
-            else
-                printf("- ");
-            printf(" ");
-        }
-        printf("\n");
-    }
+    // The pointer is pointing to the from-space, but the object there was a
+    // tombstone. Follow the forwarding pointer to find the new location of the
+    // object.
+    if (obj->type == TMOVED)
+        return obj->moved;
+
+    // Otherwise, the object has not been moved yet. Move it.
+    Obj *newloc = scan2;
+    memcpy(newloc, obj, obj->size);
+    scan2 = (void *)scan2 + obj->size;
+
+    // Put a tombstone at the location where the object used to occupy, so that
+    // the following call of forward() can find the object's new location.
+    obj->type = TMOVED;
+    obj->moved = newloc;
+    return newloc;
 }
 
 void *alloc_semispace() {
   return mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+}
+
+// Copies the root objects.
+static void forward_root_objects(Env *env, Obj **root) {
+    for (Env *frame = env; frame; frame = frame->next)
+        frame->vars = forward(frame->vars);
+    Symbols = forward(Symbols);
+
+    for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe)
+        for (Obj **ptr = cframe + 2; *ptr != (Obj *)-1; ptr++)
+            if (*ptr)
+                *ptr = forward(*ptr);
 }
 
 // Implements Cheney's copying garbage collection algorithm.
@@ -334,40 +333,49 @@ static void gc(Env *env, Obj **root) {
     gc_running = true;
     if (debug_gc)
         fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
-    void *old_memory = memory;
+
+    // Allocate the new semi-space.
+    void *from_space = memory;
     memory = alloc_semispace();
-    mem_nused = 0;
     if (debug_gc)
-        printf("\nMEMORY: %p + %x\n", memory, MEMORY_SIZE);
+        printf("\nMemory: %p + %x\n", memory, MEMORY_SIZE);
 
-    for (Env *frame = env; frame; frame = frame->next)
-        frame->vars = copy(env, root, &frame->vars);
-    Symbols = copy(env, root, &Symbols);
+    // Initialize the two poitners for GC. Initially they point to the beginning
+    // of the to-space.
+    scan1 = scan2 = memory;
 
-    if (debug_gc)
-        print_cframe(root);
+    // Copy the GC root objects first. This moves the pointer scan2.
+    forward_root_objects(env, root);
 
-    for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe) {
-        Obj **ptr = cframe + 2;
-        for (; *ptr != (Obj *)-1; ptr++) {
-            if (!*ptr) {
-                if (debug_gc)
-                    printf("Skip\n");
-                continue;
-            }
-            if (debug_gc) {
-                printf("Copying %p ", *ptr);
-                print(*ptr);
-            }
-            *ptr = copy(env, root, ptr);
-            if (debug_gc) {
-                printf(" -> %p ", *ptr);
-                print(*ptr);
-                printf("\n");
-            }
+    // Copy the objects referenced by the GC root objects located between scan1
+    // and scan2. Once it's finished, all live objects (i.e. objects reachable
+    // from the root) has been copied to the to-space.
+    while (scan1 < scan2) {
+        switch (scan1->type) {
+            case TINT:
+            case TSYMBOL:
+            case TPRIMITIVE:
+                // Any of the above types does not contain a pointer to a
+                // GC-managed object.
+                break;
+            case TCELL:
+                scan1->car = forward(scan1->car);
+                scan1->cdr = forward(scan1->cdr);
+                break;
+            case TFUNCTION:
+            case TMACRO:
+                scan1->params = forward(scan1->params);
+                scan1->body = forward(scan1->body);
+                break;
+            default:
+                error("Bug: copy: unknown type %d", scan1->type);
         }
+        scan1 = (void *)scan1 + scan1->size;
     }
-    munmap(old_memory, MEMORY_SIZE);
+
+    // Finish up GC.
+    mem_nused = (void *)scan1 - memory;
+    munmap(from_space, MEMORY_SIZE);
     if (debug_gc) {
         fprintf(stderr, "done\n");
         fprintf(stderr, "%lu bytes copied.\n", mem_nused);
@@ -894,8 +902,6 @@ int main(int argc, char **argv) {
     // Memory allocation
     memory = alloc_semispace();
     mem_nused = 0;
-    if (debug_gc)
-        printf("MEMORY: %p + %x\n", memory, MEMORY_SIZE);
 
     // Constants and primitives
     Nil = make_special(TNIL);
