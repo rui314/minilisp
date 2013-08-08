@@ -454,10 +454,10 @@ static Obj *read_quote(Env *env, Obj **root, char **p) {
     return *tmp;
 }
 
-static Obj *read_number(Env *env, Obj **root, char **p, int val) {
+static int read_number(char **p, int val) {
     for (; isdigit(**p); (*p)++)
         val = val * 10 + (**p - '0');
-    return make_int(env, root, val);
+    return val;
 }
 
 #define SYMBOL_MAX_LEN 200
@@ -506,7 +506,9 @@ static Obj *read(Env *env, Obj **root, char **p) {
         if (c == '\'')
             return read_quote(env, root, p);
         if (isdigit(c))
-            return read_number(env, root, p, c - '0');
+            return make_int(env, root, read_number(p, c - '0'));
+        if (c == '-')
+            return make_int(env, root, -read_number(p, 0));
         if (isalpha(c) || strchr("+=!@#$%^&*", c))
             return read_symbol(env, root, p, c);
         error("don't know how to handle %c", c);

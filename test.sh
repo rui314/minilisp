@@ -29,11 +29,13 @@ function run() {
 }
 
 run integer 1 1
+run integer -1 -1
 run symbol a "'a"
 run quote a "(quote a)"
 run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
 run '+' 3 '(+ 1 2)'
+run '+' -2 '(+ 1 -3)'
 run list "(a b c)" "(list 'a 'b 'c)"
 
 run 'literal list' '(a b c)' "'(a b c)"
@@ -66,4 +68,4 @@ run macroexpand '(if (= x 0) (print x))' "
   (macroexpand (if-zero x (print x)))"
 
 # Sum from 0 to 10
-run recursion 55 '(defun f (x) (if (= x 11) 0 (+ (f (+ x 1)) x))) (f 0)'
+run recursion 55 '(defun f (x) (if (= x 0) 0 (+ (f (+ x -1)) x))) (f 10)'
