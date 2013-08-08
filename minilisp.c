@@ -690,10 +690,13 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
         (*obj)->type == TFUNCTION || (*obj)->type == TSPECIAL)
         return *obj;
     if ((*obj)->type == TCELL) {
-        DEFINE3(fn, car, args);
-        *car = (*obj)->car;
+        DEFINE3(fn, expanded, args);
+        *expanded = macroexpand(env, root, obj);
+        if (*expanded != *obj)
+            return eval(env, root, expanded);
+        *fn = (*obj)->car;
+        *fn = eval(env, root, fn);
         *args = (*obj)->cdr;
-        *fn = eval(env, root, car);
         if ((*fn)->type != TPRIMITIVE && (*fn)->type != TFUNCTION)
             error("Car must be a function");
         return apply(env, root, fn, args);
@@ -917,7 +920,7 @@ int main(int argc, char **argv) {
 
     Obj **root = NULL;
     Env env = { Nil, NULL };
-    DEFINE2(expr, expanded);
+    DEFINE1(expr);
 
     define_constants(&env, root);
     define_primitives(&env, root);
@@ -932,8 +935,7 @@ int main(int argc, char **argv) {
             *expr = read(&env, root, &p);
             if (!*expr)
                 break;
-            *expanded = macroexpand(&env, root, expr);
-            print(eval(&env, root, expanded));
+            print(eval(&env, root, expr));
             printf("\n");
         }
     }
