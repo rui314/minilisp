@@ -310,7 +310,8 @@ static Obj *forward(Obj *obj) {
 }
 
 void *alloc_semispace() {
-  return mmap(NULL, MEMORY_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE,
+              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
 
 // Copies the root objects.
