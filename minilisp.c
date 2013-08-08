@@ -320,8 +320,8 @@ static void forward_root_objects(Env *env, Obj **root) {
         frame->vars = forward(frame->vars);
     Symbols = forward(Symbols);
 
-    for (Obj **cframe = root; *cframe; cframe = *(Obj ***)cframe)
-        for (Obj **ptr = cframe + 2; *ptr != (Obj *)-1; ptr++)
+    for (Obj **rp = root; rp; rp = *(Obj ***)rp)
+        for (Obj **ptr = rp + 2; *ptr != (Obj *)-1; ptr++)
             if (*ptr)
                 *ptr = forward(*ptr);
 }
