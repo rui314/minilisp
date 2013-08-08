@@ -629,8 +629,8 @@ static Obj *eval_list(Env *env, Obj **root, Obj **list) {
             *tail = (*tail)->cdr;
         }
     }
-    if (head == NULL)
-        error("eval_list: empty list?");
+    if (*head == NULL)
+        return Nil;
     return *head;
 }
 
@@ -751,15 +751,17 @@ static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
     return make_int(env, root, sum);
 }
 
+static bool is_list(Obj *obj) {
+  return obj == Nil || obj->type == TCELL;
+}
+
 static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
-    if ((*list)->type != TCELL || (*list)->car->type != TCELL ||
-        (*list)->cdr->type != TCELL) {
+    if ((*list)->type != TCELL || !is_list((*list)->car) || (*list)->cdr->type != TCELL)
         error("malformed lambda");
-    }
-    for (Obj *p = (*list)->car; p->cdr != Nil; p = p->cdr) {
+    for (Obj *p = (*list)->car; p != Nil; p = p->cdr) {
         if (p->car->type != TSYMBOL)
             error("argument must be a symbol");
-        if (p->cdr->type != TCELL)
+        if (!is_list(p->cdr))
             error("argument is not a flat list");
     }
     DEFINE2(car, cdr);

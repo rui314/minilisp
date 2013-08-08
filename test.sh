@@ -56,6 +56,7 @@ run = t '(= 3 3)'
 run = '()' '(= 3 2)'
 
 run lambda '<function>' '(lambda (x) x)'
+run lambda t '((lambda () t))'
 run lambda 9 '((lambda (x) (+ x x x)) 3)'
 run defun 12 '(defun double (x) (+ x x)) (double 6)'
 
