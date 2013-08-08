@@ -411,7 +411,7 @@ static Obj *read_list(Env *env, Obj **root, char **p) {
         error("stray dot");
     if (*obj == Cparen)
         return Nil;
-    (*head) = (*tail) = make_cell(env, root, obj, &Nil);
+    *head = *tail = make_cell(env, root, obj, &Nil);
 
     for (;;) {
         *obj = read_one(env, root, p);
@@ -429,7 +429,7 @@ static Obj *read_list(Env *env, Obj **root, char **p) {
         }
         *tmp = make_cell(env, root, obj, &Nil);
         (*tail)->cdr = *tmp;
-        (*tail) = (*tail)->cdr;
+        *tail = (*tail)->cdr;
     }
 }
 
