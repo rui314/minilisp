@@ -310,8 +310,8 @@ static Obj *forward(Obj *obj) {
 }
 
 void *alloc_semispace() {
-  return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE,
-              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
 
 // Copies the root objects.
@@ -353,23 +353,23 @@ static void gc(Env *env, Obj **root) {
     // from the root) has been copied to the to-space.
     while (scan1 < scan2) {
         switch (scan1->type) {
-            case TINT:
-            case TSYMBOL:
-            case TPRIMITIVE:
-                // Any of the above types does not contain a pointer to a
-                // GC-managed object.
-                break;
-            case TCELL:
-                scan1->car = forward(scan1->car);
-                scan1->cdr = forward(scan1->cdr);
-                break;
-            case TFUNCTION:
-            case TMACRO:
-                scan1->params = forward(scan1->params);
-                scan1->body = forward(scan1->body);
-                break;
-            default:
-                error("Bug: copy: unknown type %d", scan1->type);
+        case TINT:
+        case TSYMBOL:
+        case TPRIMITIVE:
+            // Any of the above types does not contain a pointer to a
+            // GC-managed object.
+            break;
+        case TCELL:
+            scan1->car = forward(scan1->car);
+            scan1->cdr = forward(scan1->cdr);
+            break;
+        case TFUNCTION:
+        case TMACRO:
+            scan1->params = forward(scan1->params);
+            scan1->body = forward(scan1->body);
+            break;
+        default:
+            error("Bug: copy: unknown type %d", scan1->type);
         }
         scan1 = (void *)scan1 + scan1->size;
     }
@@ -425,7 +425,7 @@ static Obj *read_list(Env *env, Obj **root, char **p) {
             (*tail)->cdr = *tmp;
             *obj = read_one(env, root, p);
             if (*obj != Cparen)
-              error("Closed parenthesis expected after dot");
+                error("Closed parenthesis expected after dot");
             return *head;
         }
         *tmp = make_cell(env, root, obj, &Nil);
@@ -925,14 +925,14 @@ int main(int argc, char **argv) {
     for (;;) {
         char *p = buf;
         if (!fgets(p, BUFSIZE, stdin))
-          return 0;
+            return 0;
         for (;;) {
-          *expr = read(&env, root, &p);
-          if (!*expr)
-              break;
-          *expanded = macroexpand(&env, root, expr);
-          print(eval(&env, root, expanded));
-          printf("\n");
+            *expr = read(&env, root, &p);
+            if (!*expr)
+                break;
+            *expanded = macroexpand(&env, root, expr);
+            print(eval(&env, root, expanded));
+            printf("\n");
         }
     }
 }
