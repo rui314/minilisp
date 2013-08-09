@@ -408,6 +408,20 @@ static int peek(void) {
     return c;
 }
 
+// Skip the input until newline is found. Newline is one of \r, \r\n or \n.
+static void skip_line(void) {
+    for (;;) {
+        int c = getchar();
+        if (c == EOF || c == '\n')
+            return;
+        if (c == '\r') {
+            if (peek() == '\n')
+                getchar();
+            return;
+        }
+    }
+}
+
 // Read a list. Note that '(' has already been read.
 static Obj *read_list(Env *env, Obj **root) {
     DEFINE4(obj, head, tail, tmp);
@@ -504,6 +518,10 @@ static Obj *read(Env *env, Obj **root) {
             continue;
         if (c == EOF)
             return NULL;
+        if (c == ';') {
+            skip_line();
+            continue;
+        }
         if (c == '(')
             return read_list(env, root);
         if (c == ')')

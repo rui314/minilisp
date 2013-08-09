@@ -41,6 +41,10 @@ run list "(a b c)" "(list 'a 'b 'c)"
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
 
+run comment 5 "
+  ; 2
+  5 ; 3"
+
 run define 7 '(define x 7) x'
 run define 10 '(define x 7) (+ x 3)'
 run define 7 '(define + 7) +'

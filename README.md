@@ -119,3 +119,8 @@ the language.
 
     (macroexpand (unless (= x 1) '(x is not 1)))
     ;; -> (if (= x 1) () (quote (x is not 1)))
+
+### Comments
+
+As in the traditional Lisp syntax, `;` (semicolon) starts a single line comment.
+The comment continues to the end of line.
