@@ -20,9 +20,9 @@ Test
 Language features
 -----------------
 
-MiniLisp is a traditional Lisp interpreter. It reads a line at a time from the
-standard input, evaluate the string as a Lisp expression, and then prints out
-the return value of the expression. Here is an example of a valid input.
+MiniLisp is a traditional Lisp interpreter. It reads a Lisp expression at a time
+from the standard input, evaluate it, and then prints out the return value of
+the expression. Here is an example of a valid input.
 
     (+ 1 2)
 
@@ -102,7 +102,8 @@ Macros look similar to functions, but they are different that macros take an
 expression as input and returns a new expression as output. `(defmacro
 macro-name (args ...) body ...)` defines a macro. Here is an example.
 
-    (defmacro unless (condition expr) (list 'if condition () expr))
+    (defmacro unless (condition expr)
+      (list 'if condition () expr))
 
 The above `defmacro` defines a new macro *unless*. *unless* is a new conditional
 which evaluates *expr* unless *condition* is a true value. You cannot do the

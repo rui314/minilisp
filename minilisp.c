@@ -390,8 +390,8 @@ static void gc(Env *env, Obj **root) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
-static Obj *read(Env *env, Obj **root, char **p);
-static Obj *read_one(Env *env, Obj **root, char **p);
+static Obj *read(Env *env, Obj **root);
+static Obj *read_one(Env *env, Obj **root);
 
 static void error(char *fmt, ...) {
     va_list ap;
@@ -402,10 +402,16 @@ static void error(char *fmt, ...) {
     exit(1);
 }
 
+static int peek(void) {
+    int c = getchar();
+    ungetc(c, stdin);
+    return c;
+}
+
 // Read a list. Note that '(' has already been read.
-static Obj *read_list(Env *env, Obj **root, char **p) {
+static Obj *read_list(Env *env, Obj **root) {
     DEFINE4(obj, head, tail, tmp);
-    *obj = read_one(env, root, p);
+    *obj = read_one(env, root);
     if (!*obj)
         error("unclosed parenthesis");
     if (*obj == Dot)
@@ -415,15 +421,15 @@ static Obj *read_list(Env *env, Obj **root, char **p) {
     *head = *tail = make_cell(env, root, obj, &Nil);
 
     for (;;) {
-        *obj = read_one(env, root, p);
+        *obj = read_one(env, root);
         if (!*obj)
             error("unclosed parenthesis");
         if (*obj == Cparen)
             return *head;
         if (*obj == Dot) {
-            *tmp = read_one(env, root, p);
+            *tmp = read_one(env, root);
             (*tail)->cdr = *tmp;
-            *obj = read_one(env, root, p);
+            *obj = read_one(env, root);
             if (*obj != Cparen)
                 error("Closed parenthesis expected after dot");
             return *head;
@@ -446,72 +452,70 @@ static Obj *intern(Env *env, Obj **root, char *name) {
     return *sym;
 }
 
-static Obj *read_quote(Env *env, Obj **root, char **p) {
+static Obj *read_quote(Env *env, Obj **root) {
     DEFINE2(sym, tmp);
     *sym = intern(env, root, "quote");
-    *tmp = read(env, root, p);
+    *tmp = read(env, root);
     *tmp = make_cell(env, root, tmp, &Nil);
     *tmp = make_cell(env, root, sym, tmp);
     return *tmp;
 }
 
-static int read_number(char **p, int val) {
-    for (; isdigit(**p); (*p)++)
-        val = val * 10 + (**p - '0');
+static int read_number(int val) {
+    while (isdigit(peek()))
+        val = val * 10 + (getchar() - '0');
     return val;
 }
 
 #define SYMBOL_MAX_LEN 200
 
-static Obj *read_symbol(Env *env, Obj **root, char **p, char c) {
+static Obj *read_symbol(Env *env, Obj **root, char c) {
     char buf[SYMBOL_MAX_LEN];
     int len = 1;
     buf[0] = c;
-    for (; isalnum(**p) || **p == '-'; (*p)++) {
+    while (isalnum(peek()) || peek() == '-') {
         if (SYMBOL_MAX_LEN + 1 < len)
             error("symbol name too long");
-        buf[len++] = **p;
+        buf[len++] = getchar();
     }
     buf[len] = '\0';
     return intern(env, root, buf);
 }
 
-static Obj *read_one(Env *env, Obj **root, char **p) {
-    switch (**p) {
+static Obj *read_one(Env *env, Obj **root) {
+    int c = getchar();
+    switch (c) {
     case ' ': case '\n': case '\r': case '\t':
-        (*p)++;
-        return read_one(env, root, p);
+        return read_one(env, root);
     case ')':
-        (*p)++;
         return Cparen;
     case '.':
-        (*p)++;
         return Dot;
     default:
-        return read(env, root, p);
+        ungetc(c, stdin);
+        return read(env, root);
     }
 }
 
-static Obj *read(Env *env, Obj **root, char **p) {
+static Obj *read(Env *env, Obj **root) {
     for (;;) {
-        char c = **p;
-        (*p)++;
-        if (c == '\0')
-            return NULL;
+        int c = getchar();
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t')
             continue;
+        if (c == EOF)
+            return NULL;
         if (c == '(')
-            return read_list(env, root, p);
+            return read_list(env, root);
         if (c == ')')
             error("stray close parenthesis");
         if (c == '\'')
-            return read_quote(env, root, p);
+            return read_quote(env, root);
         if (isdigit(c))
-            return make_int(env, root, read_number(p, c - '0'));
+            return make_int(env, root, read_number(c - '0'));
         if (c == '-')
-            return make_int(env, root, -read_number(p, 0));
+            return make_int(env, root, -read_number(0));
         if (isalpha(c) || strchr("+=!@#$%^&*", c))
-            return read_symbol(env, root, p, c);
+            return read_symbol(env, root, c);
         error("don't know how to handle %c", c);
     }
 }
@@ -924,17 +928,11 @@ int main(int argc, char **argv) {
     define_primitives(&env, root);
 
     // The main loop
-    char buf[BUFSIZE];
     for (;;) {
-        char *p = buf;
-        if (!fgets(p, BUFSIZE, stdin))
+        *expr = read(&env, root);
+        if (!*expr)
             return 0;
-        for (;;) {
-            *expr = read(&env, root, &p);
-            if (!*expr)
-                break;
-            print(eval(&env, root, expr));
-            printf("\n");
-        }
+        print(eval(&env, root, expr));
+        printf("\n");
     }
 }
