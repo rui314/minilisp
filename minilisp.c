@@ -101,7 +101,7 @@ static Obj *Symbols;
 #define MEMORY_SIZE 4096
 
 // The start of the heap will be aligned to this constant.
-#define ALIGN 16
+#define ALIGN (sizeof(void *))
 
 static void *memory;
 static size_t mem_nused;
