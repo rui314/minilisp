@@ -638,9 +638,13 @@ static Obj *eval_list(Env *env, Obj **root, Obj **list) {
     return *head;
 }
 
+static bool is_list(Obj *obj) {
+  return obj == Nil || obj->type == TCELL;
+}
+
 static Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
     if ((*fn)->type == TPRIMITIVE) {
-        if ((*args) != Nil && (*args)->type != TCELL)
+        if (!is_list(*args))
             error("argument must be a list");
         return (*fn)->fn(env, root, args);
     }
@@ -754,10 +758,6 @@ static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
         *args = (*args)->cdr;
     }
     return make_int(env, root, sum);
-}
-
-static bool is_list(Obj *obj) {
-  return obj == Nil || obj->type == TCELL;
 }
 
 static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
