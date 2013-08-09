@@ -669,13 +669,11 @@ static Obj *find(char *name, Env *env) {
 static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
-    DEFINE4(macro, args, body, params);
-    *macro = find((*obj)->car->name, env);
-    if (!*macro)
+    DEFINE5(bind, macro, args, body, params);
+    *bind = find((*obj)->car->name, env);
+    if (!*bind || (*bind)->cdr->type != TMACRO)
         return *obj;
-    *macro = (*macro)->cdr;
-    if ((*macro)->type != TMACRO)
-        return *obj;
+    *macro = (*bind)->cdr;
     *args = (*obj)->cdr;
     *body = (*macro)->body;
     *params = (*macro)->params;
@@ -702,10 +700,10 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
         return apply(env, root, fn, args);
     }
     if ((*obj)->type == TSYMBOL) {
-        Obj *val = find((*obj)->name, env);
-        if (!val)
+        Obj *bind = find((*obj)->name, env);
+        if (!bind)
             error("undefined symbol: %s", (*obj)->name);
-        return val->cdr;
+        return bind->cdr;
     }
     error("BUG: eval: Unknown tag type: %d", (*obj)->type);
 }
