@@ -391,7 +391,6 @@ static void gc(Env *env, Obj **root) {
 //======================================================================
 
 static Obj *read(Env *env, Obj **root);
-static Obj *read_one(Env *env, Obj **root);
 
 static void error(char *fmt, ...) {
     va_list ap;
@@ -425,7 +424,7 @@ static void skip_line(void) {
 // Read a list. Note that '(' has already been read.
 static Obj *read_list(Env *env, Obj **root) {
     DEFINE4(obj, head, tail, tmp);
-    *obj = read_one(env, root);
+    *obj = read(env, root);
     if (!*obj)
         error("unclosed parenthesis");
     if (*obj == Dot)
@@ -435,15 +434,15 @@ static Obj *read_list(Env *env, Obj **root) {
     *head = *tail = make_cell(env, root, obj, &Nil);
 
     for (;;) {
-        *obj = read_one(env, root);
+        *obj = read(env, root);
         if (!*obj)
             error("unclosed parenthesis");
         if (*obj == Cparen)
             return *head;
         if (*obj == Dot) {
-            *tmp = read_one(env, root);
+            *tmp = read(env, root);
             (*tail)->cdr = *tmp;
-            *obj = read_one(env, root);
+            *obj = read(env, root);
             if (*obj != Cparen)
                 error("Closed parenthesis expected after dot");
             return *head;
@@ -496,21 +495,6 @@ static Obj *read_symbol(Env *env, Obj **root, char c) {
     return intern(env, root, buf);
 }
 
-static Obj *read_one(Env *env, Obj **root) {
-    int c = getchar();
-    switch (c) {
-    case ' ': case '\n': case '\r': case '\t':
-        return read_one(env, root);
-    case ')':
-        return Cparen;
-    case '.':
-        return Dot;
-    default:
-        ungetc(c, stdin);
-        return read(env, root);
-    }
-}
-
 static Obj *read(Env *env, Obj **root) {
     for (;;) {
         int c = getchar();
@@ -525,7 +509,9 @@ static Obj *read(Env *env, Obj **root) {
         if (c == '(')
             return read_list(env, root);
         if (c == ')')
-            error("stray close parenthesis");
+            return Cparen;
+        if (c == '.')
+	    return Dot;
         if (c == '\'')
             return read_quote(env, root);
         if (isdigit(c))
@@ -950,6 +936,10 @@ int main(int argc, char **argv) {
         *expr = read(&env, root);
         if (!*expr)
             return 0;
+	if (*expr == Cparen)
+            error("stray close parenthesis");
+	if (*expr == Dot)
+	    error("stray dot");
         print(eval(&env, root, expr));
         printf("\n");
     }
