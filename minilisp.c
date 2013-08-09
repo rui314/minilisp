@@ -17,7 +17,7 @@
 
 // The first word of the object in memory represents its type.
 enum {
-    // Regular objects visible from the user.
+    // Regular objects visible from the user
     TINT = 1,
     TCELL,
     TSYMBOL,
@@ -32,7 +32,7 @@ enum {
     TMOVED,
 };
 
-// Subtypes for TSPECIAL.
+// Subtypes for TSPECIAL
 enum {
     TNIL = 1,
     TDOT,
@@ -42,7 +42,7 @@ enum {
 
 struct Obj;
 
-// The environment frame to manage variables.
+// The environment frame to manage variables
 typedef struct Env {
     struct Obj *vars;
     struct Env *next;
@@ -50,7 +50,7 @@ typedef struct Env {
 
 typedef struct Obj *Primitive(Env *env, struct Obj **root, struct Obj **args);
 
-// The object type.
+// The object type
 typedef struct Obj {
     // The first word of the object represents the type of the object. Any code
     // that handles object needs to check its type first, then access the
@@ -86,7 +86,7 @@ typedef struct Obj {
     };
 } Obj;
 
-// Constants.
+// Constants
 static Obj *Nil;
 static Obj *Dot;
 static Obj *Cparen;
@@ -97,17 +97,17 @@ static Obj *True;
 // array but a list.
 static Obj *Symbols;
 
-// The size of the heap in byte.
+// The size of the heap in byte
 #define MEMORY_SIZE 4096
 
-// The start of the heap will be aligned to this constant.
+// The start of the heap will be aligned to this constant
 #define ALIGN (sizeof(void *))
 
 static void *memory;
-static size_t mem_nused;
+static size_t mem_nused = 0;
 static bool gc_running = false;
 
-// Flags to debug GC.
+// Flags to debug GC
 static bool debug_gc = false;
 static bool always_gc = false;
 
@@ -182,6 +182,9 @@ static void print(Obj *obj);
 static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     // Add the size of the type tag and size fields.
     size += offsetof(Obj, value);
+
+    // Add a padding at the end of the object, so that the next object will be
+    // allocated at the proper alignment boundary.
     if (size % ALIGN != 0)
         size += ALIGN - (size % ALIGN);
 
@@ -202,7 +205,7 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     // happen if the requested size was too large or the from-space was filled
     // with too many live objects.
     if (MEMORY_SIZE < mem_nused + size)
-        error("memory exhausted");
+        error("Memory exhausted");
 
     Obj *obj = memory + mem_nused;
     mem_nused += size;
@@ -350,7 +353,7 @@ static void gc(Env *env, Obj **root) {
 
     // Copy the objects referenced by the GC root objects located between scan1
     // and scan2. Once it's finished, all live objects (i.e. objects reachable
-    // from the root) has been copied to the to-space.
+    // from the root) will have been copied to the to-space.
     while (scan1 < scan2) {
         switch (scan1->type) {
         case TINT:
@@ -407,7 +410,7 @@ static int peek(void) {
     return c;
 }
 
-// Skip the input until newline is found. Newline is one of \r, \r\n or \n.
+// Skips the input until newline is found. Newline is one of \r, \r\n or \n.
 static void skip_line(void) {
     for (;;) {
         int c = getchar();
@@ -421,14 +424,14 @@ static void skip_line(void) {
     }
 }
 
-// Read a list. Note that '(' has already been read.
+// Reads a list. Note that '(' has already been read.
 static Obj *read_list(Env *env, Obj **root) {
     DEFINE4(obj, head, tail, tmp);
     *obj = read(env, root);
     if (!*obj)
-        error("unclosed parenthesis");
+        error("Unclosed parenthesis");
     if (*obj == Dot)
-        error("stray dot");
+        error("Stray dot");
     if (*obj == Cparen)
         return Nil;
     *head = *tail = make_cell(env, root, obj, &Nil);
@@ -436,7 +439,7 @@ static Obj *read_list(Env *env, Obj **root) {
     for (;;) {
         *obj = read(env, root);
         if (!*obj)
-            error("unclosed parenthesis");
+            error("Unclosed parenthesis");
         if (*obj == Cparen)
             return *head;
         if (*obj == Dot) {
@@ -454,7 +457,7 @@ static Obj *read_list(Env *env, Obj **root) {
 }
 
 // May create a new symbol. If there's a symbol with the same name, it will not
-// create a new symbol but returns the existing one.
+// create a new symbol but return the existing one.
 static Obj *intern(Env *env, Obj **root, char *name) {
     for (Obj *p = Symbols; p != Nil; p = p->cdr)
         if (strcmp(name, p->car->name) == 0)
@@ -488,7 +491,7 @@ static Obj *read_symbol(Env *env, Obj **root, char c) {
     buf[0] = c;
     while (isalnum(peek()) || peek() == '-') {
         if (SYMBOL_MAX_LEN + 1 < len)
-            error("symbol name too long");
+            error("Symbol name too long");
         buf[len++] = getchar();
     }
     buf[len] = '\0';
@@ -511,7 +514,7 @@ static Obj *read(Env *env, Obj **root) {
         if (c == ')')
             return Cparen;
         if (c == '.')
-	    return Dot;
+            return Dot;
         if (c == '\'')
             return read_quote(env, root);
         if (isdigit(c))
@@ -520,7 +523,7 @@ static Obj *read(Env *env, Obj **root) {
             return make_int(env, root, -read_number(0));
         if (isalpha(c) || strchr("+=!@#$%^&*", c))
             return read_symbol(env, root, c);
-        error("don't know how to handle %c", c);
+        error("Don't know how to handle %c", c);
     }
 }
 
@@ -537,17 +540,15 @@ static void print(Obj *obj) {
         printf("(");
         for (;;) {
             print(obj->car);
-            if (obj->cdr == Nil) {
+            if (obj->cdr == Nil)
+                break;
+            if (obj->cdr->type != TCELL) {
+                printf(" . ");
+                print(obj->cdr);
                 break;
             }
-            if (obj->cdr->type == TCELL && !debug_gc) {
-                printf(" ");
-                obj = obj->cdr;
-                continue;
-            }
-            printf(" . ");
-            print(obj->cdr);
-            break;
+            printf(" ");
+            obj = obj->cdr;
         }
         printf(")");
         return;
@@ -668,10 +669,10 @@ static Obj *find(char *name, Env *env) {
     for (; env; env = env->next) {
         Obj *cell;
         for (cell = env->vars; cell != Nil; cell = cell->cdr) {
-            Obj *var = cell->car;
-            char *varname = var->car->name;
+            Obj *bind = cell->car;
+            char *varname = bind->car->name;
             if (strcmp(name, varname) == 0)
-                return var;
+                return bind;
         }
     }
     return NULL;
@@ -708,16 +709,16 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
         *fn = eval(env, root, fn);
         *args = (*obj)->cdr;
         if ((*fn)->type != TPRIMITIVE && (*fn)->type != TFUNCTION)
-            error("Car must be a function");
+            error("The head of a list must be a function");
         return apply(env, root, fn, args);
     }
     if ((*obj)->type == TSYMBOL) {
         Obj *bind = find((*obj)->name, env);
         if (!bind)
-            error("undefined symbol: %s", (*obj)->name);
+            error("Undefined symbol: %s", (*obj)->name);
         return bind->cdr;
     }
-    error("BUG: eval: Unknown tag type: %d", (*obj)->type);
+    error("Bug: eval: Unknown tag type: %d", (*obj)->type);
 }
 
 //======================================================================
@@ -726,7 +727,7 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
 
 static Obj *prim_quote(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 1)
-        error("malformed quote");
+        error("Malformed quote");
     return (*list)->car;
 }
 
@@ -736,11 +737,11 @@ static Obj *prim_list(Env *env, Obj **root, Obj **list) {
 
 static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
-        error("malformed setq");
+        error("Malformed setq");
     DEFINE2(bind, value);
     *bind = find((*list)->car->name, env);
     if (!*bind)
-        error("unbound variable %s", (*list)->car->name);
+        error("Unbound variable %s", (*list)->car->name);
     *value = (*list)->cdr->car;
     *value = eval(env, root, value);
     (*bind)->cdr = *value;
@@ -749,29 +750,23 @@ static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
 
 static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
     DEFINE1(args);
-    *args = eval_list(env, root, list);
     int sum = 0;
-    for (;;) {
+    for (*args = eval_list(env, root, list); *args != Nil; *args = (*args)->cdr) {
         if ((*args)->car->type != TINT)
             error("+ takes only numbers");
         sum += (*args)->car->value;
-        if ((*args)->cdr == Nil)
-            break;
-        if ((*args)->cdr->type != TCELL)
-            error("+ does not take incomplete list");
-        *args = (*args)->cdr;
     }
     return make_int(env, root, sum);
 }
 
 static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
     if ((*list)->type != TCELL || !is_list((*list)->car) || (*list)->cdr->type != TCELL)
-        error("malformed lambda");
+        error("Malformed lambda");
     for (Obj *p = (*list)->car; p != Nil; p = p->cdr) {
         if (p->car->type != TSYMBOL)
-            error("argument must be a symbol");
+            error("Argument must be a symbol");
         if (!is_list(p->cdr))
-            error("argument is not a flat list");
+            error("Argument is not a flat list");
     }
     DEFINE2(car, cdr);
     *car = (*list)->car;
@@ -785,7 +780,7 @@ static Obj *prim_lambda(Env *env, Obj **root, Obj **list) {
 
 static Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
     if ((*list)->car->type != TSYMBOL || (*list)->cdr->type != TCELL) {
-        error("malformed defun");
+        error("Malformed defun");
     }
     DEFINE5(fn, var, sym, rest, tmp);
     *sym = (*list)->car;
@@ -801,7 +796,7 @@ static Obj *prim_defun(Env *env, Obj **root, Obj **list) {
 
 static Obj *prim_define(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
-        error("malformed setq");
+        error("Malformed setq");
     DEFINE2(sym, value);
     *sym = (*list)->car;
     *value = (*list)->cdr->car;
@@ -816,7 +811,7 @@ static Obj *prim_defmacro(Env *env, Obj **root, Obj **list) {
 
 static Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 1)
-        error("malformed macroexpand");
+        error("Malformed macroexpand");
     DEFINE1(body);
     *body = (*list)->car;
     return macroexpand(env, root, body);
@@ -833,7 +828,7 @@ static Obj *prim_println(Env *env, Obj **root, Obj **list) {
 static Obj *prim_if(Env *env, Obj **root, Obj **list) {
     int len = list_length(*list);
     if (len < 2)
-        error("malformed if");
+        error("Malformed if");
     DEFINE3(cond, then, els);
     *cond = (*list)->car;
     *then = (*list)->cdr->car;
@@ -848,7 +843,7 @@ static Obj *prim_if(Env *env, Obj **root, Obj **list) {
 
 static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
     if (list_length(*list) != 2)
-        error("malformed =");
+        error("Malformed =");
     DEFINE1(values);
     *values = eval_list(env, root, list);
     Obj *x = (*values)->car;
@@ -913,7 +908,6 @@ int main(int argc, char **argv) {
 
     // Memory allocation
     memory = alloc_semispace();
-    mem_nused = 0;
 
     // Constants and primitives
     Nil = make_special(TNIL);
@@ -934,10 +928,10 @@ int main(int argc, char **argv) {
         *expr = read(&env, root);
         if (!*expr)
             return 0;
-	if (*expr == Cparen)
-            error("stray close parenthesis");
-	if (*expr == Dot)
-	    error("stray dot");
+        if (*expr == Cparen)
+            error("Stray close parenthesis");
+        if (*expr == Dot)
+            error("Stray dot");
         print(eval(&env, root, expr));
         printf("\n");
     }
