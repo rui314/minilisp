@@ -11,6 +11,11 @@
 #include <string.h>
 #include <sys/mman.h>
 
+// For Mac.
+#ifndef MAP_ANONYMOUS
+# define MAP_ANONYMOUS MAP_ANON
+#endif
+
 //======================================================================
 // Lisp objects
 //======================================================================
