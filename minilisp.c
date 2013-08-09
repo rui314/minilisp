@@ -901,8 +901,6 @@ static void define_primitives(Env *env, Obj **root) {
 // Entry point
 //======================================================================
 
-#define BUFSIZE 250
-
 static bool getEnvFlag(char *name) {
     char *val = getenv(name);
     return val && val[0];
