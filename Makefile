@@ -1,6 +1,6 @@
 CFLAGS=-std=gnu99 -g
 
-.PHONY: clean
+.PHONY: clean test
 
 minilisp: minilisp.c
 
