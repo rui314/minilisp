@@ -138,11 +138,13 @@ static void print(Obj *obj);
 // would work in most cases but fails with SEGV if GC happens during the
 // execution of the code. Any code that allocates memory may invoke GC.
 
+#define ROOT_END ((Obj *)-1)
+
 #define ADD_ROOT(size)                                          \
     Obj *root_ADD_ROOT_[size+3];                                \
     root_ADD_ROOT_[0] = (Obj *)root;                            \
     root_ADD_ROOT_[1] = (Obj *)__func__;                        \
-    root_ADD_ROOT_[size+2] = (Obj *)-1;                         \
+    root_ADD_ROOT_[size+2] = ROOT_END;                          \
     memset(root_ADD_ROOT_ + 2, 0, sizeof(Obj *) * size);        \
     root = root_ADD_ROOT_
 
@@ -322,7 +324,7 @@ static void forward_root_objects(Env *env, Obj **root) {
     Symbols = forward(Symbols);
 
     for (Obj **rp = root; rp; rp = *(Obj ***)rp)
-        for (Obj **ptr = rp + 2; *ptr != (Obj *)-1; ptr++)
+        for (Obj **ptr = rp + 2; *ptr != ROOT_END; ptr++)
             if (*ptr)
                 *ptr = forward(*ptr);
 }
