@@ -51,10 +51,13 @@ run define 7 '(define + 7) +'
 run setq 11 '(define x 7) (setq x 11) x'
 run setq 17 '(setq + 17) +'
 
+run if a "(if 1 'a)"
+run if '()' "(if () 'a)"
 run if a "(if 1 'a 'b)"
 run if a "(if 0 'a 'b)"
 run if a "(if 'x 'a 'b)"
-run if b "(if '() 'a 'b)"
+run if b "(if () 'a 'b)"
+run if c "(if () 'a 'b 'c)"
 
 run = t '(= 3 3)'
 run = '()' '(= 3 2)'
