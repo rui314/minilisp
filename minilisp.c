@@ -616,14 +616,12 @@ static Env push_env(Env *env, Obj **root, Obj **vars, Obj **values) {
 
 // Evaluates the list elements from head and returns the last return value.
 static Obj *progn(Env *env, Obj **root, Obj **list) {
-    DEFINE1(car);
-    for (;;) {
-        *car = (*list)->car;
-        if ((*list)->cdr == Nil)
-            return eval(env, root, car);
-        eval(env, root, car);
-        *list = (*list)->cdr;
+    DEFINE2(lp, r);
+    for (*lp = *list; *lp != Nil; *lp = (*lp)->cdr) {
+        *r = (*lp)->car;
+        *r = eval(env, root, r);
     }
+    return *r;
 }
 
 // Evaluates all the list elements and returns their return values as a new
