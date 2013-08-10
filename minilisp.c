@@ -486,11 +486,11 @@ static int read_number(int val) {
 #define SYMBOL_MAX_LEN 200
 
 static Obj *read_symbol(Env *env, Obj **root, char c) {
-    char buf[SYMBOL_MAX_LEN];
+    char buf[SYMBOL_MAX_LEN + 1];
     int len = 1;
     buf[0] = c;
     while (isalnum(peek()) || peek() == '-') {
-        if (SYMBOL_MAX_LEN + 1 < len)
+        if (SYMBOL_MAX_LEN <= len)
             error("Symbol name too long");
         buf[len++] = getchar();
     }
