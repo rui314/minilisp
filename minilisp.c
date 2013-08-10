@@ -668,8 +668,7 @@ static Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
 // Searches for a variable by name. Returns null if not found.
 static Obj *find(Env *env, char *name) {
     for (; env; env = env->next) {
-        Obj *cell;
-        for (cell = env->vars; cell != Nil; cell = cell->cdr) {
+        for (Obj *cell = env->vars; cell != Nil; cell = cell->cdr) {
             Obj *bind = cell->car;
             char *varname = bind->car->name;
             if (strcmp(name, varname) == 0)
