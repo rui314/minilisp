@@ -124,3 +124,15 @@ the language.
 
 As in the traditional Lisp syntax, `;` (semicolon) starts a single line comment.
 The comment continues to the end of line.
+
+No GC Branch
+------------
+
+There is a MiniLisp branch from which the code for garbage collection has been
+stripped. The accepted language is the same, but the code is simpler than the
+master branch's one. The reader might want to read the nogc branch first, then
+proceed to the master branch, to understand the code step by step.
+
+The nogc branch is available at
+[nogc](https://github.com/rui314/minilisp/tree/nogc). The original is available
+at [master](https://github.com/rui314/minilisp).
