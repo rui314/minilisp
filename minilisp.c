@@ -607,8 +607,8 @@ static Env push_env(Env *env, Obj **root, Obj **vars, Obj **values) {
     DEFINE5(p, q, sym, val, map);
     *map = Nil;
     for (p = vars, q = values; *p != Nil; *p = (*p)->cdr, *q = (*q)->cdr) {
-        *val = (*q)->car;
         *sym = (*p)->car;
+        *val = (*q)->car;
         *map = acons(env, root, sym, val, map);
     }
     return (Env){ *map, env };
