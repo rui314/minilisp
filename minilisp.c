@@ -100,9 +100,6 @@ static Obj *Symbols;
 // The size of the heap in byte
 #define MEMORY_SIZE 4096
 
-// The start of the heap will be aligned to this constant
-#define ALIGN (sizeof(void *))
-
 static void *memory;
 static size_t mem_nused = 0;
 static bool gc_running = false;
@@ -179,15 +176,22 @@ static void gc(Env *env, Obj **root);
     Obj **var4 = &root[5];                      \
     Obj **var5 = &root[6]
 
+// Round up the given value to a multiple of size. Size must be a power of 2. It
+// adds size - 1 first, then zero-ing the least significant bits to make the
+// result a multiple of size. I know these bit operations may look a little bit
+// tricky, but it's efficient and thus frequently used.
+static inline size_t roundup(size_t var, size_t size) {
+    return (var + size - 1) & ~(size - 1);
+}
+
 // Allocates memory block. This may start GC if we don't have enough memory.
 static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
+    // The object must be large enough to contain a pointer for the forwarding
+    // pointer. Make it larger if it's smaller than that.
+    size = roundup(size, sizeof(void *));
+
     // Add the size of the type tag and size fields.
     size += offsetof(Obj, value);
-
-    // Add a padding at the end of the object, so that the next object will be
-    // allocated at the proper alignment boundary.
-    if (size % ALIGN != 0)
-        size += ALIGN - (size % ALIGN);
 
     // If the debug flag is on, allocate a new memory space to force all the
     // existing objects to move to new addresses, to invalidate the old
@@ -209,9 +213,14 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
         error("Memory exhausted");
 
     Obj *obj = memory + mem_nused;
-    mem_nused += size;
     obj->type = type;
     obj->size = size;
+
+    // Round up the allocated memory size to the nearest alignment boundary, so
+    // that the next object will be allocated at the proper alignment boundary.
+    // Currently we align the object at the same boundary as the pointer.
+    mem_nused = roundup(mem_nused + size, sizeof(void *));
+
     return obj;
 }
 
