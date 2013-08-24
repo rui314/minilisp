@@ -621,7 +621,8 @@ static Env push_env(Env *env, Obj **root, Obj **vars, Obj **values) {
         *val = (*q)->car;
         *map = acons(env, root, sym, val, map);
     }
-    return (Env){ *map, env };
+    Env r = { *map, env };
+    return r;
 }
 
 // Evaluates the list elements from head and returns the last return value.
