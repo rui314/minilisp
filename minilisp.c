@@ -193,6 +193,11 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     // Add the size of the type tag and size fields.
     size += offsetof(Obj, value);
 
+    // Round up the object size to the nearest alignment boundary, so that the
+    // next object will be allocated at the proper alignment boundary.
+    // Currently we align the object at the same boundary as the pointer.
+    size = roundup(size, sizeof(void *));
+
     // If the debug flag is on, allocate a new memory space to force all the
     // existing objects to move to new addresses, to invalidate the old
     // addresses. By doing this the GC behavior becomes more predictable and
@@ -212,15 +217,11 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     if (MEMORY_SIZE < mem_nused + size)
         error("Memory exhausted");
 
+    // Allocate the object.
     Obj *obj = memory + mem_nused;
     obj->type = type;
     obj->size = size;
-
-    // Round up the allocated memory size to the nearest alignment boundary, so
-    // that the next object will be allocated at the proper alignment boundary.
-    // Currently we align the object at the same boundary as the pointer.
-    mem_nused = roundup(mem_nused + size, sizeof(void *));
-
+    mem_nused += size;
     return obj;
 }
 
