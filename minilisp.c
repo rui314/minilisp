@@ -13,7 +13,7 @@
 // Lisp objects
 //======================================================================
 
-// The first word of the object in memory represents the object type.
+// The Lisp object type
 enum {
     // Regular objects visible from the user
     TINT = 1,
@@ -202,7 +202,7 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     if (always_gc && !gc_running)
         gc(env, root);
 
-    // Otherwise, run GC only only when the available memory is not large enough.
+    // Otherwise, run GC only when the available memory is not large enough.
     if (!always_gc && MEMORY_SIZE < mem_nused + size)
         gc(env, root);
 
@@ -289,7 +289,7 @@ static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
 Obj *scan1;
 Obj *scan2;
 
-// Copies one object from the from-space to the to-space. Returns the object's
+// Moves one object from the from-space to the to-space. Returns the object's
 // new address. If the object has already been moved, does nothing but just
 // returns the new address.
 static Obj *forward(Obj *obj) {
@@ -348,13 +348,13 @@ static void gc(Env *env, Obj **root) {
     if (debug_gc)
         fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
 
-    // Allocate the new semi-space.
+    // Allocate a new semi-space.
     void *from_space = memory;
     memory = alloc_semispace();
     if (debug_gc)
         printf("\nMemory: %p + %x\n", memory, MEMORY_SIZE);
 
-    // Initialize the two poitners for GC. Initially they point to the beginning
+    // Initialize the two pointers for GC. Initially they point to the beginning
     // of the to-space.
     scan1 = scan2 = memory;
 
@@ -705,9 +705,11 @@ static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
 
 // Evaluates the S expression.
 static Obj *eval(Env *env, Obj **root, Obj **obj) {
+    // Self-evaluating objects
     if ((*obj)->type == TINT || (*obj)->type == TPRIMITIVE ||
         (*obj)->type == TFUNCTION || (*obj)->type == TSPECIAL)
         return *obj;
+    // Function application form
     if ((*obj)->type == TCELL) {
         DEFINE3(fn, expanded, args);
         *expanded = macroexpand(env, root, obj);
@@ -720,6 +722,7 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
             error("The head of a list must be a function");
         return apply(env, root, fn, args);
     }
+    // Variable
     if ((*obj)->type == TSYMBOL) {
         Obj *bind = find(env, (*obj)->name);
         if (!bind)
