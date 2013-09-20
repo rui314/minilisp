@@ -782,7 +782,7 @@ static Obj *prim_lambda(Env *env, Obj **root, Obj **list) {
 static Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
     if ((*list)->car->type != TSYMBOL || (*list)->cdr->type != TCELL)
         error("Malformed defun");
-    DEFINE4(fn, var, sym, rest);
+    DEFINE3(fn, sym, rest);
     *sym = (*list)->car;
     *rest = (*list)->cdr;
     *fn = handle_function(env, root, rest, type);
