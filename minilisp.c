@@ -23,10 +23,9 @@ enum {
     TFUNCTION,
     TMACRO,
     TSPECIAL,
-    // The marker that indicates the object has been moved to other location by
-    // GC. The new location can be found at the forwarding pointer. Only the
-    // functions to do garbage collection set and handle the object of this
-    // type. Other functions will never see the object of this type.
+    // The marker that indicates the object has been moved to other location by GC. The new location
+    // can be found at the forwarding pointer. Only the functions to do garbage collection set and
+    // handle the object of this type. Other functions will never see the object of this type.
     TMOVED,
 };
 
@@ -40,9 +39,8 @@ enum {
 
 struct Obj;
 
-// The association lists containing the mapping from symbols to their value if
-// the symbol is evaluated as variable. This data strucutre is usually called
-// the environment frame.
+// The association lists containing the mapping from symbols to their value if the symbol is
+// evaluated as variable. This data strucutre is usually called the environment frame.
 typedef struct Env {
     struct Obj *vars;
     struct Env *next;
@@ -52,13 +50,12 @@ typedef struct Obj *Primitive(Env *env, struct Obj **root, struct Obj **args);
 
 // The object type
 typedef struct Obj {
-    // The first word of the object represents the type of the object. Any code
-    // that handles object needs to check its type first, then access the
-    // following union members.
+    // The first word of the object represents the type of the object. Any code that handles object
+    // needs to check its type first, then access the following union members.
     int type;
 
-    // The total size of the object, including "type" field, this field, the
-    // contents, and the padding at the end of the object.
+    // The total size of the object, including "type" field, this field, the contents, and the
+    // padding at the end of the object.
     int size;
 
     // Object values.
@@ -92,9 +89,8 @@ static Obj *Dot;
 static Obj *Cparen;
 static Obj *True;
 
-// The list containing all symbols. Such data structure is traditionally called
-// the "obarray", but I avoid using it as a variable name as this is not an
-// array but a list.
+// The list containing all symbols. Such data structure is traditionally called the "obarray", but I
+// avoid using it as a variable name as this is not an array but a list.
 static Obj *Symbols;
 
 // The size of the heap in byte
@@ -115,26 +111,23 @@ static void gc(Env *env, Obj **root);
 // Memory management
 //======================================================================
 
-// Currently we are using Cheney's copying GC algorithm, with which the
-// available memory is split into two halves and all objects are moved from one
-// half to another every time GC is invoked. That means the address of the
-// object keeps changing. If you take the address of an object and keep it in a
-// C variable, dereferencing it could cause SEGV because the address becomes
-// invalid after GC runs.
+// Currently we are using Cheney's copying GC algorithm, with which the available memory is split
+// into two halves and all objects are moved from one half to another every time GC is invoked. That
+// means the address of the object keeps changing. If you take the address of an object and keep it
+// in a C variable, dereferencing it could cause SEGV because the address becomes invalid after GC
+// runs.
 //
-// In order to deal with that, all access from C to Lisp objects will go through
-// two levels of pointer dereferences. The C local variable is pointing to a
-// pointer on the C stack, and the pointer is pointing to the Lisp object. GC is
-// aware of the pointers in the stack and updates their contents with the
-// objects' new addresses when GC happens.
+// In order to deal with that, all access from C to Lisp objects will go through two levels of
+// pointer dereferences. The C local variable is pointing to a pointer on the C stack, and the
+// pointer is pointing to the Lisp object. GC is aware of the pointers in the stack and updates
+// their contents with the objects' new addresses when GC happens.
 //
-// The following is a macro to reserve the area in the C stack for the pointers.
-// The contents of this area are considered to be GC root.
+// The following is a macro to reserve the area in the C stack for the pointers. The contents of
+// this area are considered to be GC root.
 //
-// Be careful not to bypass the two levels of pointer indirections. If you
-// create a direct pointer to an object, it'll cause a subtle bug. Such code
-// would work in most cases but fails with SEGV if GC happens during the
-// execution of the code. Any code that allocates memory may invoke GC.
+// Be careful not to bypass the two levels of pointer indirections. If you create a direct pointer
+// to an object, it'll cause a subtle bug. Such code would work in most cases but fails with SEGV if
+// GC happens during the execution of the code. Any code that allocates memory may invoke GC.
 
 #define ROOT_END ((Obj *)-1)
 
@@ -176,34 +169,32 @@ static void gc(Env *env, Obj **root);
     Obj **var4 = &root[5];                      \
     Obj **var5 = &root[6]
 
-// Round up the given value to a multiple of size. Size must be a power of 2. It
-// adds size - 1 first, then zero-ing the least significant bits to make the
-// result a multiple of size. I know these bit operations may look a little bit
-// tricky, but it's efficient and thus frequently used.
+// Round up the given value to a multiple of size. Size must be a power of 2. It adds size - 1
+// first, then zero-ing the least significant bits to make the result a multiple of size. I know
+// these bit operations may look a little bit tricky, but it's efficient and thus frequently used.
 static inline size_t roundup(size_t var, size_t size) {
     return (var + size - 1) & ~(size - 1);
 }
 
 // Allocates memory block. This may start GC if we don't have enough memory.
 static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
-    // The object must be large enough to contain a pointer for the forwarding
-    // pointer. Make it larger if it's smaller than that.
+    // The object must be large enough to contain a pointer for the forwarding pointer. Make it
+    // larger if it's smaller than that.
     size = roundup(size, sizeof(void *));
 
     // Add the size of the type tag and size fields.
     size += offsetof(Obj, value);
 
-    // Round up the object size to the nearest alignment boundary, so that the
-    // next object will be allocated at the proper alignment boundary.
-    // Currently we align the object at the same boundary as the pointer.
+    // Round up the object size to the nearest alignment boundary, so that the next object will be
+    // allocated at the proper alignment boundary. Currently we align the object at the same
+    // boundary as the pointer.
     size = roundup(size, sizeof(void *));
 
-    // If the debug flag is on, allocate a new memory space to force all the
-    // existing objects to move to new addresses, to invalidate the old
-    // addresses. By doing this the GC behavior becomes more predictable and
-    // repeatable. If there's a memory bug that the C variable has a direct
-    // reference to a Lisp object, the pointer will become invalid by this GC
-    // call. Dereferencing that will immediately causes SEGV.
+    // If the debug flag is on, allocate a new memory space to force all the existing objects to
+    // move to new addresses, to invalidate the old addresses. By doing this the GC behavior becomes
+    // more predictable and repeatable. If there's a memory bug that the C variable has a direct
+    // reference to a Lisp object, the pointer will become invalid by this GC call. Dereferencing
+    // that will immediately cause SEGV.
     if (always_gc && !gc_running)
         gc(env, root);
 
@@ -211,9 +202,8 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     if (!always_gc && MEMORY_SIZE < mem_nused + size)
         gc(env, root);
 
-    // Terminate the program if we couldn't satisfy the memory request. This can
-    // happen if the requested size was too large or the from-space was filled
-    // with too many live objects.
+    // Terminate the program if we couldn't satisfy the memory request. This can happen if the
+    // requested size was too large or the from-space was filled with too many live objects.
     if (MEMORY_SIZE < mem_nused + size)
         error("Memory exhausted");
 
@@ -281,33 +271,28 @@ static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
 // Garbage collector
 //======================================================================
 
-// Cheney's algorithm uses two pointers to keep track of GC status. At first
-// both pointers point to the beginning of the to-space. As GC progresses, they
-// are moved towards the end of the to-space. The objects before "scan1" are the
-// objects that are fully copied. The objects between "scan1" and "scan2" have
-// already been copied, but may contain pointers to the from-space. "scan2"
+// Cheney's algorithm uses two pointers to keep track of GC status. At first both pointers point to
+// the beginning of the to-space. As GC progresses, they are moved towards the end of the
+// to-space. The objects before "scan1" are the objects that are fully copied. The objects between
+// "scan1" and "scan2" have already been copied, but may contain pointers to the from-space. "scan2"
 // points to the beginning of the free space.
 Obj *scan1;
 Obj *scan2;
 
-// Moves one object from the from-space to the to-space. Returns the object's
-// new address. If the object has already been moved, does nothing but just
-// returns the new address.
+// Moves one object from the from-space to the to-space. Returns the object's new address. If the
+// object has already been moved, does nothing but just returns the new address.
 static Obj *forward(Obj *obj) {
-    // The object of type TSPECIAL is not managed by GC and will never be
-    // copied.
+    // The object of type TSPECIAL is not managed by GC and will never be copied.
     if (obj->type == TSPECIAL)
         return obj;
 
-    // If the object's address is in the to-space, the object has already been
-    // moved.
+    // If the object's address is in the to-space, the object has already been moved.
     ptrdiff_t offset = (void *)obj - memory;
     if (0 <= offset && offset < MEMORY_SIZE)
         return obj;
 
-    // The pointer is pointing to the from-space, but the object there was a
-    // tombstone. Follow the forwarding pointer to find the new location of the
-    // object.
+    // The pointer is pointing to the from-space, but the object there was a tombstone. Follow the
+    // forwarding pointer to find the new location of the object.
     if (obj->type == TMOVED)
         return obj->moved;
 
@@ -316,8 +301,8 @@ static Obj *forward(Obj *obj) {
     memcpy(newloc, obj, obj->size);
     scan2 = (void *)scan2 + obj->size;
 
-    // Put a tombstone at the location where the object used to occupy, so that
-    // the following call of forward() can find the object's new location.
+    // Put a tombstone at the location where the object used to occupy, so that the following call
+    // of forward() can find the object's new location.
     obj->type = TMOVED;
     obj->moved = newloc;
     return newloc;
@@ -355,23 +340,21 @@ static void gc(Env *env, Obj **root) {
     if (debug_gc)
         printf("\nMemory: %p + %x\n", memory, MEMORY_SIZE);
 
-    // Initialize the two pointers for GC. Initially they point to the beginning
-    // of the to-space.
+    // Initialize the two pointers for GC. Initially they point to the beginning of the to-space.
     scan1 = scan2 = memory;
 
     // Copy the GC root objects first. This moves the pointer scan2.
     forward_root_objects(env, root);
 
-    // Copy the objects referenced by the GC root objects located between scan1
-    // and scan2. Once it's finished, all live objects (i.e. objects reachable
-    // from the root) will have been copied to the to-space.
+    // Copy the objects referenced by the GC root objects located between scan1 and scan2. Once it's
+    // finished, all live objects (i.e. objects reachable from the root) will have been copied to
+    // the to-space.
     while (scan1 < scan2) {
         switch (scan1->type) {
         case TINT:
         case TSYMBOL:
         case TPRIMITIVE:
-            // Any of the above types does not contain a pointer to a
-            // GC-managed object.
+            // Any of the above types does not contain a pointer to a GC-managed object.
             break;
         case TCELL:
             scan1->car = forward(scan1->car);
@@ -467,8 +450,8 @@ static Obj *read_list(Env *env, Obj **root) {
     }
 }
 
-// May create a new symbol. If there's a symbol with the same name, it will not
-// create a new symbol but return the existing one.
+// May create a new symbol. If there's a symbol with the same name, it will not create a new symbol
+// but return the existing one.
 static Obj *intern(Env *env, Obj **root, char *name) {
     for (Obj *p = Symbols; p != Nil; p = p->cdr)
         if (strcmp(name, p->car->name) == 0)
@@ -635,8 +618,7 @@ static Obj *progn(Env *env, Obj **root, Obj **list) {
     return *r;
 }
 
-// Evaluates all the list elements and returns their return values as a new
-// list.
+// Evaluates all the list elements and returns their return values as a new list.
 static Obj *eval_list(Env *env, Obj **root, Obj **list) {
     DEFINE4(head, tail, lp, tmp);
     for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
