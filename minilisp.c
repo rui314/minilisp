@@ -232,7 +232,7 @@ static Obj *make_symbol(Env *env, Obj **root, char *name) {
 }
 
 static Obj *make_primitive(Env *env, Obj **root, Primitive *fn) {
-    Obj *r = alloc(env, root, TPRIMITIVE, sizeof(void *));
+    Obj *r = alloc(env, root, TPRIMITIVE, sizeof(Primitive *));
     r->fn = fn;
     return r;
 }
