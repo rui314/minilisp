@@ -225,13 +225,6 @@ static Obj *make_int(Env *env, Obj **root, int value) {
     return r;
 }
 
-static Obj *make_cell(Env *env, Obj **root, Obj **car, Obj **cdr) {
-    Obj *cell = alloc(env, root, TCELL, sizeof(Obj *) * 2);
-    cell->car = *car;
-    cell->cdr = *cdr;
-    return cell;
-}
-
 static Obj *make_symbol(Env *env, Obj **root, char *name) {
     Obj *sym = alloc(env, root, TSYMBOL, strlen(name) + 1);
     strcpy(sym->name, name);
@@ -260,11 +253,18 @@ static Obj *make_special(int subtype) {
     return r;
 }
 
+static Obj *cons(Env *env, Obj **root, Obj **car, Obj **cdr) {
+    Obj *cell = alloc(env, root, TCELL, sizeof(Obj *) * 2);
+    cell->car = *car;
+    cell->cdr = *cdr;
+    return cell;
+}
+
 // Returns ((x . y) . a)
 static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
     DEFINE1(cell);
-    *cell = make_cell(env, root, x, y);
-    return make_cell(env, root, cell, a);
+    *cell = cons(env, root, x, y);
+    return cons(env, root, cell, a);
 }
 
 //======================================================================
@@ -428,7 +428,7 @@ static Obj *read_list(Env *env, Obj **root) {
         error("Stray dot");
     if (*obj == Cparen)
         return Nil;
-    *head = *tail = make_cell(env, root, obj, &Nil);
+    *head = *tail = cons(env, root, obj, &Nil);
 
     for (;;) {
         *obj = read(env, root);
@@ -444,7 +444,7 @@ static Obj *read_list(Env *env, Obj **root) {
                 error("Closed parenthesis expected after dot");
             return *head;
         }
-        *tmp = make_cell(env, root, obj, &Nil);
+        *tmp = cons(env, root, obj, &Nil);
         (*tail)->cdr = *tmp;
         *tail = (*tail)->cdr;
     }
@@ -458,7 +458,7 @@ static Obj *intern(Env *env, Obj **root, char *name) {
             return p->car;
     DEFINE1(sym);
     *sym = make_symbol(env, root, name);
-    Symbols = make_cell(env, root, sym, &Symbols);
+    Symbols = cons(env, root, sym, &Symbols);
     return *sym;
 }
 
@@ -466,8 +466,8 @@ static Obj *read_quote(Env *env, Obj **root) {
     DEFINE2(sym, tmp);
     *sym = intern(env, root, "quote");
     *tmp = read(env, root);
-    *tmp = make_cell(env, root, tmp, &Nil);
-    *tmp = make_cell(env, root, sym, tmp);
+    *tmp = cons(env, root, tmp, &Nil);
+    *tmp = cons(env, root, sym, tmp);
     return *tmp;
 }
 
@@ -625,9 +625,9 @@ static Obj *eval_list(Env *env, Obj **root, Obj **list) {
         *tmp = (*lp)->car;
         *tmp = eval(env, root, tmp);
         if (*head == NULL) {
-            *head = *tail = make_cell(env, root, tmp, &Nil);
+            *head = *tail = cons(env, root, tmp, &Nil);
         } else {
-            *tmp = make_cell(env, root, tmp, &Nil);
+            *tmp = cons(env, root, tmp, &Nil);
             (*tail)->cdr = *tmp;
             *tail = (*tail)->cdr;
         }
