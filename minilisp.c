@@ -1,6 +1,7 @@
 // This software is in the public domain.
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -287,7 +288,7 @@ static Obj *forward(Obj *obj) {
         return obj;
 
     // If the object's address is in the to-space, the object has already been moved.
-    ptrdiff_t offset = (void *)obj - memory;
+    ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)memory;
     if (0 <= offset && offset < MEMORY_SIZE)
         return obj;
 
@@ -299,7 +300,7 @@ static Obj *forward(Obj *obj) {
     // Otherwise, the object has not been moved yet. Move it.
     Obj *newloc = scan2;
     memcpy(newloc, obj, obj->size);
-    scan2 = (void *)scan2 + obj->size;
+    scan2 = (Obj *)((uint8_t *)scan2 + obj->size);
 
     // Put a tombstone at the location where the object used to occupy, so that the following call
     // of forward() can find the object's new location.
@@ -368,11 +369,11 @@ static void gc(Env *env, Obj **root) {
         default:
             error("Bug: copy: unknown type %d", scan1->type);
         }
-        scan1 = (void *)scan1 + scan1->size;
+        scan1 = (Obj *)((uint8_t *)scan1 + scan1->size);
     }
 
     // Finish up GC.
-    mem_nused = (void *)scan1 - memory;
+    mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     munmap(from_space, MEMORY_SIZE);
     if (debug_gc) {
         fprintf(stderr, "done\n");
