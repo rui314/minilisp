@@ -462,6 +462,7 @@ static Obj *intern(Env *env, Obj **root, char *name) {
     return *sym;
 }
 
+// Reader marcro ' (single quote). It reads an expression and returns (quote <expr>).
 static Obj *read_quote(Env *env, Obj **root) {
     DEFINE2(sym, tmp);
     *sym = intern(env, root, "quote");
@@ -689,12 +690,22 @@ static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
 
 // Evaluates the S expression.
 static Obj *eval(Env *env, Obj **root, Obj **obj) {
-    // Self-evaluating objects
-    if ((*obj)->type == TINT || (*obj)->type == TPRIMITIVE ||
-        (*obj)->type == TFUNCTION || (*obj)->type == TSPECIAL)
+    switch ((*obj)->type) {
+    case TINT:
+    case TPRIMITIVE:
+    case TFUNCTION:
+    case TSPECIAL:
+        // Self-evaluating objects
         return *obj;
-    // Function application form
-    if ((*obj)->type == TCELL) {
+    case TSYMBOL: {
+        // Variable
+        Obj *bind = find(env, (*obj)->name);
+        if (!bind)
+            error("Undefined symbol: %s", (*obj)->name);
+        return bind->cdr;
+    }
+    case TCELL: {
+        // Function application form
         DEFINE3(fn, expanded, args);
         *expanded = macroexpand(env, root, obj);
         if (*expanded != *obj)
@@ -706,14 +717,9 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
             error("The head of a list must be a function");
         return apply(env, root, fn, args);
     }
-    // Variable
-    if ((*obj)->type == TSYMBOL) {
-        Obj *bind = find(env, (*obj)->name);
-        if (!bind)
-            error("Undefined symbol: %s", (*obj)->name);
-        return bind->cdr;
+    default:
+        error("Bug: eval: Unknown tag type: %d", (*obj)->type);
     }
-    error("Bug: eval: Unknown tag type: %d", (*obj)->type);
 }
 
 //======================================================================
@@ -853,7 +859,7 @@ static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
     Obj *x = (*values)->car;
     Obj *y = (*values)->cdr->car;
     if (x->type != TINT || y->type != TINT)
-        error("= only takes number");
+        error("= only takes numbers");
     return x->value == y->value ? True : Nil;
 }
 
