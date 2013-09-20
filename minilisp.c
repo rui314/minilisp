@@ -1,5 +1,6 @@
 // This software is in the public domain.
 
+#include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -239,8 +240,7 @@ static Obj *make_primitive(Env *env, Obj **root, Primitive *fn) {
 }
 
 static Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **body) {
-    if (type != TFUNCTION && type != TMACRO)
-        error("Bug: invalid argument for make_function");
+    assert(type == TFUNCTION || type == TMACRO);
     Obj *r = alloc(env, root, type, sizeof(Obj *) * 2);
     r->params = *params;
     r->body = *body;
@@ -329,8 +329,7 @@ static void forward_root_objects(Env *env, Obj **root) {
 // Implements Cheney's copying garbage collection algorithm.
 // http://en.wikipedia.org/wiki/Cheney%27s_algorithm
 static void gc(Env *env, Obj **root) {
-    if (gc_running)
-        error("Bug: GC is already running");
+    assert(!gc_running);
     gc_running = true;
     if (debug_gc)
         fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
