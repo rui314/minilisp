@@ -132,7 +132,7 @@ static void gc(void *root);
 // to an object, it'll cause a subtle bug. Such code would work in most cases but fails with SEGV if
 // GC happens during the execution of the code. Any code that allocates memory may invoke GC.
 
-#define ROOT_END ((Obj *)-1)
+#define ROOT_END ((void *)-1)
 
 #define ADD_ROOT(size)                                          \
     void *root_ADD_ROOT_[size + 2];                             \
