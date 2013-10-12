@@ -420,6 +420,18 @@ static int peek(void) {
     return c;
 }
 
+// Destructively reverses the given list.
+static Obj *reverse(Obj *p) {
+  Obj *ret = Nil;
+  while (p != Nil) {
+    Obj *head = p;
+    p = p->cdr;
+    head->cdr = ret;
+    ret = head;
+  }
+  return ret;
+}
+
 // Skips the input until newline is found. Newline is one of \r, \r\n or \n.
 static void skip_line(void) {
     for (;;) {
@@ -436,33 +448,23 @@ static void skip_line(void) {
 
 // Reads a list. Note that '(' has already been read.
 static Obj *read_list(void *root) {
-    DEFINE4(obj, head, tail, tmp);
-    *obj = read_expr(root);
-    if (!*obj)
-        error("Unclosed parenthesis");
-    if (*obj == Dot)
-        error("Stray dot");
-    if (*obj == Cparen)
-        return Nil;
-    *head = *tail = cons(root, obj, &Nil);
-
+    DEFINE4(obj, head, ret, tmp);
+    *head = Nil;
     for (;;) {
         *obj = read_expr(root);
         if (!*obj)
             error("Unclosed parenthesis");
         if (*obj == Cparen)
-            return *head;
+            return reverse(*head);
         if (*obj == Dot) {
+            *ret = reverse(*head);
             *tmp = read_expr(root);
-            (*tail)->cdr = *tmp;
-            *obj = read_expr(root);
-            if (*obj != Cparen)
+            (*head)->cdr = *tmp;
+            if (read_expr(root) != Cparen)
                 error("Closed parenthesis expected after dot");
-            return *head;
+            return *ret;
         }
-        *tmp = cons(root, obj, &Nil);
-        (*tail)->cdr = *tmp;
-        *tail = (*tail)->cdr;
+        *head = cons(root, obj, head);
     }
 }
 
@@ -639,21 +641,14 @@ static Obj *progn(void *root, Obj **env, Obj **list) {
 
 // Evaluates all the list elements and returns their return values as a new list.
 static Obj *eval_list(void *root, Obj **env, Obj **list) {
-    DEFINE4(head, tail, lp, tmp);
+    DEFINE4(head, lp, expr, result);
+    *head = Nil;
     for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
-        *tmp = (*lp)->car;
-        *tmp = eval(root, env, tmp);
-        if (*head == NULL) {
-            *head = *tail = cons(root, tmp, &Nil);
-        } else {
-            *tmp = cons(root, tmp, &Nil);
-            (*tail)->cdr = *tmp;
-            *tail = (*tail)->cdr;
-        }
+        *expr = (*lp)->car;
+        *result = eval(root, env, expr);
+        *head = cons(root, result, head);
     }
-    if (*head == NULL)
-        return Nil;
-    return *head;
+    return reverse(*head);
 }
 
 static bool is_list(Obj *obj) {
