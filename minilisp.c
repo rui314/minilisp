@@ -238,8 +238,8 @@ static Obj *alloc(void *root, int type, size_t size) {
 // to-space. The objects before "scan1" are the objects that are fully copied. The objects between
 // "scan1" and "scan2" have already been copied, but may contain pointers to the from-space. "scan2"
 // points to the beginning of the free space.
-Obj *scan1;
-Obj *scan2;
+static Obj *scan1;
+static Obj *scan2;
 
 // Moves one object from the from-space to the to-space. Returns the object's new address. If the
 // object has already been moved, does nothing but just returns the new address.
@@ -270,7 +270,7 @@ static Obj *forward(Obj *obj) {
     return newloc;
 }
 
-void *alloc_semispace() {
+static void *alloc_semispace() {
     return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE,
                 MAP_PRIVATE | MAP_ANON, -1, 0);
 }
