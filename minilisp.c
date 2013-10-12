@@ -241,7 +241,7 @@ static Obj *make_primitive(Obj **root, Primitive *fn) {
     return r;
 }
 
-static Obj *make_function(Obj **root, int type, Obj **params, Obj **body, Obj **env) {
+static Obj *make_function(Obj **root, Obj **env, int type, Obj **params, Obj **body) {
     assert(type == TFUNCTION || type == TMACRO);
     Obj *r = alloc(root, type, sizeof(Obj *) * 3);
     r->params = *params;
@@ -790,7 +790,7 @@ static Obj *handle_function(Obj **root, Obj **env, Obj **list, int type) {
     DEFINE2(car, cdr);
     *car = (*list)->car;
     *cdr = (*list)->cdr;
-    return make_function(root, type, car, cdr, env);
+    return make_function(root, env, type, car, cdr);
 }
 
 // (lambda (<symbol> ...) expr ...)
