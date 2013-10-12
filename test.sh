@@ -67,6 +67,12 @@ run if c "(if () 'a 'b 'c)"
 run = t '(= 3 3)'
 run = '()' '(= 3 2)'
 
+# eq
+run eq t "(eq 'foo 'foo)"
+run eq t "(eq + +)"
+run eq '()' "(eq 'foo 'bar)"
+run eq '()' "(eq + 'bar)"
+
 # Functions
 run lambda '<function>' '(lambda (x) x)'
 run lambda t '((lambda () t))'

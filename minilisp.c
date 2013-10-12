@@ -876,6 +876,15 @@ static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
     return x->value == y->value ? True : Nil;
 }
 
+// (eq expr expr)
+static Obj *prim_eq(void *root, Obj **env, Obj **list) {
+    if (list_length(*list) != 2)
+        error("Malformed eq");
+    DEFINE1(values);
+    *values = eval_list(root, env, list);
+    return (*values)->car == (*values)->cdr->car ? True : Nil;
+}
+
 // (gc)
 static Obj *prim_gc(void *root, Obj **env, Obj **list) {
     gc(root);
@@ -912,6 +921,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "lambda", prim_lambda);
     add_primitive(root, env, "if", prim_if);
     add_primitive(root, env, "=", prim_num_eq);
+    add_primitive(root, env, "eq", prim_eq);
     add_primitive(root, env, "println", prim_println);
     add_primitive(root, env, "gc", prim_gc);
     add_primitive(root, env, "exit", prim_exit);
