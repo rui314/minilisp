@@ -885,12 +885,6 @@ static Obj *prim_eq(void *root, Obj **env, Obj **list) {
     return (*values)->car == (*values)->cdr->car ? True : Nil;
 }
 
-// (gc)
-static Obj *prim_gc(void *root, Obj **env, Obj **list) {
-    gc(root);
-    return Nil;
-}
-
 // (exit)
 static Obj *prim_exit(void *root, Obj **env, Obj **list) {
     exit(0);
@@ -923,7 +917,6 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "=", prim_num_eq);
     add_primitive(root, env, "eq", prim_eq);
     add_primitive(root, env, "println", prim_println);
-    add_primitive(root, env, "gc", prim_gc);
     add_primitive(root, env, "exit", prim_exit);
 }
 
