@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 
 //======================================================================
 // Lisp objects
@@ -26,10 +25,6 @@ enum {
     TMACRO,
     TSPECIAL,
     TENV,
-    // The marker that indicates the object has been moved to other location by GC. The new location
-    // can be found at the forwarding pointer. Only the functions to do garbage collection set and
-    // handle the object of this type. Other functions will never see the object of this type.
-    TMOVED,
 };
 
 // Subtypes for TSPECIAL
@@ -43,17 +38,13 @@ enum {
 struct Obj;
 
 // Typedef for the primitive function.
-typedef struct Obj *Primitive(struct Obj **root, struct Obj **env, struct Obj **args);
+typedef struct Obj *Primitive(struct Obj *env, struct Obj *args);
 
 // The object type
 typedef struct Obj {
     // The first word of the object represents the type of the object. Any code that handles object
     // needs to check its type first, then access the following union members.
     int type;
-
-    // The total size of the object, including "type" field, this field, the contents, and the
-    // padding at the end of the object.
-    int size;
 
     // Object values.
     union {
@@ -97,156 +88,46 @@ static Obj *True;
 // avoid using it as a variable name as this is not an array but a list.
 static Obj *Symbols;
 
-// The size of the heap in byte
-#define MEMORY_SIZE 4096
-
-static void *memory;
-static size_t mem_nused = 0;
-static bool gc_running = false;
-
-// Flags to debug GC
-static bool debug_gc = false;
-static bool always_gc = false;
-
 static void error(char *fmt, ...) __attribute((noreturn));
-static void gc(Obj **root);
-
-//======================================================================
-// Memory management
-//======================================================================
-
-// Currently we are using Cheney's copying GC algorithm, with which the available memory is split
-// into two halves and all objects are moved from one half to another every time GC is invoked. That
-// means the address of the object keeps changing. If you take the address of an object and keep it
-// in a C variable, dereferencing it could cause SEGV because the address becomes invalid after GC
-// runs.
-//
-// In order to deal with that, all access from C to Lisp objects will go through two levels of
-// pointer dereferences. The C local variable is pointing to a pointer on the C stack, and the
-// pointer is pointing to the Lisp object. GC is aware of the pointers in the stack and updates
-// their contents with the objects' new addresses when GC happens.
-//
-// The following is a macro to reserve the area in the C stack for the pointers. The contents of
-// this area are considered to be GC root.
-//
-// Be careful not to bypass the two levels of pointer indirections. If you create a direct pointer
-// to an object, it'll cause a subtle bug. Such code would work in most cases but fails with SEGV if
-// GC happens during the execution of the code. Any code that allocates memory may invoke GC.
-
-#define ROOT_END ((Obj *)-1)
-
-#define ADD_ROOT(size)                                          \
-    Obj *root_ADD_ROOT_[size+3];                                \
-    root_ADD_ROOT_[0] = (Obj *)root;                            \
-    root_ADD_ROOT_[1] = (Obj *)__func__;                        \
-    root_ADD_ROOT_[size+2] = ROOT_END;                          \
-    memset(root_ADD_ROOT_ + 2, 0, sizeof(Obj *) * size);        \
-    root = root_ADD_ROOT_
-
-#define DEFINE1(var1)                           \
-    ADD_ROOT(1);                                \
-    Obj **var1 = &root[2]
-
-#define DEFINE2(var1, var2)                     \
-    ADD_ROOT(2);                                \
-    Obj **var1 = &root[2];                      \
-    Obj **var2 = &root[3]
-
-#define DEFINE3(var1, var2, var3)               \
-    ADD_ROOT(3);                                \
-    Obj **var1 = &root[2];                      \
-    Obj **var2 = &root[3];                      \
-    Obj **var3 = &root[4]
-
-#define DEFINE4(var1, var2, var3, var4)         \
-    ADD_ROOT(4);                                \
-    Obj **var1 = &root[2];                      \
-    Obj **var2 = &root[3];                      \
-    Obj **var3 = &root[4];                      \
-    Obj **var4 = &root[5]
-
-#define DEFINE5(var1, var2, var3, var4, var5)   \
-    ADD_ROOT(5);                                \
-    Obj **var1 = &root[2];                      \
-    Obj **var2 = &root[3];                      \
-    Obj **var3 = &root[4];                      \
-    Obj **var4 = &root[5];                      \
-    Obj **var5 = &root[6]
-
-// Round up the given value to a multiple of size. Size must be a power of 2. It adds size - 1
-// first, then zero-ing the least significant bits to make the result a multiple of size. I know
-// these bit operations may look a little bit tricky, but it's efficient and thus frequently used.
-static inline size_t roundup(size_t var, size_t size) {
-    return (var + size - 1) & ~(size - 1);
-}
-
-// Allocates memory block. This may start GC if we don't have enough memory.
-static Obj *alloc(Obj **root, int type, size_t size) {
-    // The object must be large enough to contain a pointer for the forwarding pointer. Make it
-    // larger if it's smaller than that.
-    size = roundup(size, sizeof(void *));
-
-    // Add the size of the type tag and size fields.
-    size += offsetof(Obj, value);
-
-    // Round up the object size to the nearest alignment boundary, so that the next object will be
-    // allocated at the proper alignment boundary. Currently we align the object at the same
-    // boundary as the pointer.
-    size = roundup(size, sizeof(void *));
-
-    // If the debug flag is on, allocate a new memory space to force all the existing objects to
-    // move to new addresses, to invalidate the old addresses. By doing this the GC behavior becomes
-    // more predictable and repeatable. If there's a memory bug that the C variable has a direct
-    // reference to a Lisp object, the pointer will become invalid by this GC call. Dereferencing
-    // that will immediately cause SEGV.
-    if (always_gc && !gc_running)
-        gc(root);
-
-    // Otherwise, run GC only when the available memory is not large enough.
-    if (!always_gc && MEMORY_SIZE < mem_nused + size)
-        gc(root);
-
-    // Terminate the program if we couldn't satisfy the memory request. This can happen if the
-    // requested size was too large or the from-space was filled with too many live objects.
-    if (MEMORY_SIZE < mem_nused + size)
-        error("Memory exhausted");
-
-    // Allocate the object.
-    Obj *obj = memory + mem_nused;
-    obj->type = type;
-    obj->size = size;
-    mem_nused += size;
-    return obj;
-}
 
 //======================================================================
 // Constructors
 //======================================================================
 
-static Obj *make_int(Obj **root, int value) {
-    Obj *r = alloc(root, TINT, sizeof(int));
+static Obj *alloc(int type, size_t size) {
+    // Add the size of the type tag.
+    size += offsetof(Obj, value);
+
+    // Allocate the object.
+    Obj *obj = malloc(size);
+    obj->type = type;
+    return obj;
+}
+
+static Obj *make_int(int value) {
+    Obj *r = alloc(TINT, sizeof(int));
     r->value = value;
     return r;
 }
 
-static Obj *make_symbol(Obj **root, char *name) {
-    Obj *sym = alloc(root, TSYMBOL, strlen(name) + 1);
+static Obj *make_symbol(char *name) {
+    Obj *sym = alloc(TSYMBOL, strlen(name) + 1);
     strcpy(sym->name, name);
     return sym;
 }
 
-static Obj *make_primitive(Obj **root, Primitive *fn) {
-    Obj *r = alloc(root, TPRIMITIVE, sizeof(Primitive *));
+static Obj *make_primitive(Primitive *fn) {
+    Obj *r = alloc(TPRIMITIVE, sizeof(Primitive *));
     r->fn = fn;
     return r;
 }
 
-static Obj *make_function(Obj **root, int type, Obj **params, Obj **body, Obj **env) {
+static Obj *make_function(int type, Obj *params, Obj *body, Obj *env) {
     assert(type == TFUNCTION || type == TMACRO);
-    Obj *r = alloc(root, type, sizeof(Obj *) * 3);
-    r->params = *params;
-    r->body = *body;
-    r->env = *env;
+    Obj *r = alloc(type, sizeof(Obj *) * 3);
+    r->params = params;
+    r->body = body;
+    r->env = env;
     return r;
 }
 
@@ -257,141 +138,23 @@ static Obj *make_special(int subtype) {
     return r;
 }
 
-struct Obj *make_env(Obj **root, Obj **vars, Obj **up) {
-    Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
-    r->vars = *vars;
-    r->up = *up;
+struct Obj *make_env(Obj *vars, Obj *up) {
+    Obj *r = alloc(TENV, sizeof(Obj *) * 2);
+    r->vars = vars;
+    r->up = up;
     return r;
 }
 
-static Obj *cons(Obj **root, Obj **car, Obj **cdr) {
-    Obj *cell = alloc(root, TCELL, sizeof(Obj *) * 2);
-    cell->car = *car;
-    cell->cdr = *cdr;
+static Obj *cons(Obj *car, Obj *cdr) {
+    Obj *cell = alloc(TCELL, sizeof(Obj *) * 2);
+    cell->car = car;
+    cell->cdr = cdr;
     return cell;
 }
 
 // Returns ((x . y) . a)
-static Obj *acons(Obj **root, Obj **x, Obj **y, Obj **a) {
-    DEFINE1(cell);
-    *cell = cons(root, x, y);
-    return cons(root, cell, a);
-}
-
-//======================================================================
-// Garbage collector
-//======================================================================
-
-// Cheney's algorithm uses two pointers to keep track of GC status. At first both pointers point to
-// the beginning of the to-space. As GC progresses, they are moved towards the end of the
-// to-space. The objects before "scan1" are the objects that are fully copied. The objects between
-// "scan1" and "scan2" have already been copied, but may contain pointers to the from-space. "scan2"
-// points to the beginning of the free space.
-Obj *scan1;
-Obj *scan2;
-
-// Moves one object from the from-space to the to-space. Returns the object's new address. If the
-// object has already been moved, does nothing but just returns the new address.
-static Obj *forward(Obj *obj) {
-    // The object of type TSPECIAL is not managed by GC and will never be copied.
-    if (obj->type == TSPECIAL)
-        return obj;
-
-    // If the object's address is in the to-space, the object has already been moved.
-    ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)memory;
-    if (0 <= offset && offset < MEMORY_SIZE)
-        return obj;
-
-    // The pointer is pointing to the from-space, but the object there was a tombstone. Follow the
-    // forwarding pointer to find the new location of the object.
-    if (obj->type == TMOVED)
-        return obj->moved;
-
-    // Otherwise, the object has not been moved yet. Move it.
-    Obj *newloc = scan2;
-    memcpy(newloc, obj, obj->size);
-    scan2 = (Obj *)((uint8_t *)scan2 + obj->size);
-
-    // Put a tombstone at the location where the object used to occupy, so that the following call
-    // of forward() can find the object's new location.
-    obj->type = TMOVED;
-    obj->moved = newloc;
-    return newloc;
-}
-
-void *alloc_semispace() {
-    return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANON, -1, 0);
-}
-
-// Copies the root objects.
-static void forward_root_objects(Obj **root) {
-    Symbols = forward(Symbols);
-    for (Obj **rp = root; rp; rp = *(Obj ***)rp)
-        for (Obj **ptr = rp + 2; *ptr != ROOT_END; ptr++)
-            if (*ptr)
-                *ptr = forward(*ptr);
-}
-
-// Implements Cheney's copying garbage collection algorithm.
-// http://en.wikipedia.org/wiki/Cheney%27s_algorithm
-static void gc(Obj **root) {
-    assert(!gc_running);
-    gc_running = true;
-    if (debug_gc)
-        fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
-
-    // Allocate a new semi-space.
-    void *from_space = memory;
-    memory = alloc_semispace();
-    if (debug_gc)
-        printf("\nMemory: %p + %x\n", memory, MEMORY_SIZE);
-
-    // Initialize the two pointers for GC. Initially they point to the beginning of the to-space.
-    scan1 = scan2 = memory;
-
-    // Copy the GC root objects first. This moves the pointer scan2.
-    forward_root_objects(root);
-
-    // Copy the objects referenced by the GC root objects located between scan1 and scan2. Once it's
-    // finished, all live objects (i.e. objects reachable from the root) will have been copied to
-    // the to-space.
-    while (scan1 < scan2) {
-        switch (scan1->type) {
-        case TINT:
-        case TSYMBOL:
-        case TPRIMITIVE:
-            // Any of the above types does not contain a pointer to a GC-managed object.
-            break;
-        case TCELL:
-            scan1->car = forward(scan1->car);
-            scan1->cdr = forward(scan1->cdr);
-            break;
-        case TFUNCTION:
-        case TMACRO:
-            scan1->params = forward(scan1->params);
-            scan1->body = forward(scan1->body);
-            scan1->env = forward(scan1->env);
-            break;
-        case TENV:
-            scan1->vars = forward(scan1->vars);
-            if (scan1->up)
-                scan1->up = forward(scan1->up);
-            break;
-        default:
-            error("Bug: copy: unknown type %d", scan1->type);
-        }
-        scan1 = (Obj *)((uint8_t *)scan1 + scan1->size);
-    }
-
-    // Finish up GC.
-    mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
-    munmap(from_space, MEMORY_SIZE);
-    if (debug_gc) {
-        fprintf(stderr, "done\n");
-        fprintf(stderr, "%lu bytes copied.\n", mem_nused);
-    }
-    gc_running = false;
+static Obj *acons(Obj *x, Obj *y, Obj *a) {
+    return cons(cons(x, y), a);
 }
 
 //======================================================================
@@ -400,7 +163,7 @@ static void gc(Obj **root) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
-static Obj *read(Obj **root);
+static Obj *read(void);
 
 static void error(char *fmt, ...) {
     va_list ap;
@@ -432,57 +195,49 @@ static void skip_line(void) {
 }
 
 // Reads a list. Note that '(' has already been read.
-static Obj *read_list(Obj **root) {
-    DEFINE4(obj, head, tail, tmp);
-    *obj = read(root);
-    if (!*obj)
+static Obj *read_list(void) {
+    Obj *obj = read();
+    if (!obj)
         error("Unclosed parenthesis");
-    if (*obj == Dot)
+    if (obj == Dot)
         error("Stray dot");
-    if (*obj == Cparen)
+    if (obj == Cparen)
         return Nil;
-    *head = *tail = cons(root, obj, &Nil);
+    Obj *head, *tail;
+    head = tail = cons(obj, Nil);
 
     for (;;) {
-        *obj = read(root);
-        if (!*obj)
+        Obj *obj = read();
+        if (!obj)
             error("Unclosed parenthesis");
-        if (*obj == Cparen)
-            return *head;
-        if (*obj == Dot) {
-            *tmp = read(root);
-            (*tail)->cdr = *tmp;
-            *obj = read(root);
-            if (*obj != Cparen)
+        if (obj == Cparen)
+            return head;
+        if (obj == Dot) {
+            tail->cdr = read();
+            if (read() != Cparen)
                 error("Closed parenthesis expected after dot");
-            return *head;
+            return head;
         }
-        *tmp = cons(root, obj, &Nil);
-        (*tail)->cdr = *tmp;
-        *tail = (*tail)->cdr;
+        tail->cdr = cons(obj, Nil);
+        tail = tail->cdr;
     }
 }
 
 // May create a new symbol. If there's a symbol with the same name, it will not create a new symbol
 // but return the existing one.
-static Obj *intern(Obj **root, char *name) {
+static Obj *intern(char *name) {
     for (Obj *p = Symbols; p != Nil; p = p->cdr)
         if (strcmp(name, p->car->name) == 0)
             return p->car;
-    DEFINE1(sym);
-    *sym = make_symbol(root, name);
-    Symbols = cons(root, sym, &Symbols);
-    return *sym;
+    Obj *sym = make_symbol(name);
+    Symbols = cons(sym, Symbols);
+    return sym;
 }
 
 // Reader marcro ' (single quote). It reads an expression and returns (quote <expr>).
-static Obj *read_quote(Obj **root) {
-    DEFINE2(sym, tmp);
-    *sym = intern(root, "quote");
-    *tmp = read(root);
-    *tmp = cons(root, tmp, &Nil);
-    *tmp = cons(root, sym, tmp);
-    return *tmp;
+static Obj *read_quote(void) {
+    Obj *sym = intern("quote");
+    return cons(sym, cons(read(), Nil));
 }
 
 static int read_number(int val) {
@@ -493,7 +248,7 @@ static int read_number(int val) {
 
 #define SYMBOL_MAX_LEN 200
 
-static Obj *read_symbol(Obj **root, char c) {
+static Obj *read_symbol(char c) {
     char buf[SYMBOL_MAX_LEN + 1];
     int len = 1;
     buf[0] = c;
@@ -503,10 +258,10 @@ static Obj *read_symbol(Obj **root, char c) {
         buf[len++] = getchar();
     }
     buf[len] = '\0';
-    return intern(root, buf);
+    return intern(buf);
 }
 
-static Obj *read(Obj **root) {
+static Obj *read(void) {
     for (;;) {
         int c = getchar();
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t')
@@ -518,19 +273,19 @@ static Obj *read(Obj **root) {
             continue;
         }
         if (c == '(')
-            return read_list(root);
+            return read_list();
         if (c == ')')
             return Cparen;
         if (c == '.')
             return Dot;
         if (c == '\'')
-            return read_quote(root);
+            return read_quote();
         if (isdigit(c))
-            return make_int(root, read_number(c - '0'));
+            return make_int(read_number(c - '0'));
         if (c == '-')
-            return make_int(root, -read_number(0));
+            return make_int(-read_number(0));
         if (isalpha(c) || strchr("+=!@#$%^&*", c))
-            return read_symbol(root, c);
+            return read_symbol(c);
         error("Don't know how to handle %c", c);
     }
 }
@@ -538,9 +293,6 @@ static Obj *read(Obj **root) {
 // Prints the given object.
 static void print(Obj *obj) {
     switch (obj->type) {
-    case TMOVED:
-        printf("<moved>");
-        return;
     case TINT:
         printf("%d", obj->value);
         return;
@@ -601,56 +353,49 @@ static int list_length(Obj *list) {
 // Evaluator
 //======================================================================
 
-static Obj *eval(Obj **root, Obj **env, Obj **obj);
+static Obj *eval(Obj *env, Obj *obj);
 
-static void add_variable(Obj **root, Obj **env, Obj **sym, Obj **val) {
-    DEFINE2(vars, tmp);
-    *vars = (*env)->vars;
-    *tmp = acons(root, sym, val, vars);
-    (*env)->vars = *tmp;
+static void add_variable(Obj *env, Obj *sym, Obj *val) {
+    env->vars = acons(sym, val, env->vars);
 }
 
 // Returns a newly created environment frame.
-static Obj *push_env(Obj **root, Obj **env, Obj **vars, Obj **values) {
-    if (list_length(*vars) != list_length(*values))
+static Obj *push_env(Obj *env, Obj *vars, Obj *values) {
+    if (list_length(vars) != list_length(values))
         error("Cannot apply function: number of argument does not match");
-    DEFINE5(p, q, sym, val, map);
-    *map = Nil;
-    for (p = vars, q = values; *p != Nil; *p = (*p)->cdr, *q = (*q)->cdr) {
-        *sym = (*p)->car;
-        *val = (*q)->car;
-        *map = acons(root, sym, val, map);
+    Obj *map = Nil;
+    for (Obj *p = vars, *q = values; p != Nil; p = p->cdr, q = q->cdr) {
+        Obj *sym = p->car;
+        Obj *val = q->car;
+        map = acons(sym, val, map);
     }
-    return make_env(root, map, env);
+    return make_env(map, env);
 }
 
 // Evaluates the list elements from head and returns the last return value.
-static Obj *progn(Obj **root, Obj **env, Obj **list) {
-    DEFINE2(lp, r);
-    for (*lp = *list; *lp != Nil; *lp = (*lp)->cdr) {
-        *r = (*lp)->car;
-        *r = eval(root, env, r);
-    }
-    return *r;
+static Obj *progn(Obj *env, Obj *list) {
+    Obj *r = NULL;
+    for (Obj *lp = list; lp != Nil; lp = lp->cdr)
+        r = eval(env, lp->car);
+    return r;
 }
 
 // Evaluates all the list elements and returns their return values as a new list.
-static Obj *eval_list(Obj **root, Obj **env, Obj **list) {
-    DEFINE4(head, tail, lp, tmp);
-    for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
-        *tmp = (*lp)->car;
-        *tmp = eval(root, env, tmp);
-        if (*head == NULL) {
-            *head = *tail = cons(root, tmp, &Nil);
+static Obj *eval_list(Obj *env, Obj *list) {
+    Obj *head = NULL;
+    Obj *tail = NULL;
+    for (Obj *lp = list; lp != Nil; lp = lp->cdr) {
+        Obj *tmp = eval(env, lp->car);
+        if (head == NULL) {
+            head = tail = cons(tmp, Nil);
         } else {
-            *tmp = cons(root, tmp, &Nil);
-            (*tail)->cdr = *tmp;
-            *tail = (*tail)->cdr;
+            tail->cdr = cons(tmp, Nil);
+            tail = tail->cdr;
         }
     }
-    if (*head == NULL)
+    if (head == NULL)
         return Nil;
-    return *head;
+    return head;
 }
 
 static bool is_list(Obj *obj) {
@@ -658,26 +403,24 @@ static bool is_list(Obj *obj) {
 }
 
 // Apply fn with args.
-static Obj *apply(Obj **root, Obj **env, Obj **fn, Obj **args) {
-    if (!is_list(*args))
+static Obj *apply(Obj *env, Obj *fn, Obj *args) {
+    if (!is_list(args))
         error("argument must be a list");
-    if ((*fn)->type == TPRIMITIVE)
-        return (*fn)->fn(root, env, args);
-    if ((*fn)->type == TFUNCTION) {
-        DEFINE4(body, params, eargs, newenv);
-        *body = (*fn)->body;
-        *params = (*fn)->params;
-        *eargs = eval_list(root, env, args);
-        *newenv = (*fn)->env;
-        *newenv = push_env(root, newenv, params, eargs);
-        return progn(root, newenv, body);
+    if (fn->type == TPRIMITIVE)
+        return fn->fn(env, args);
+    if (fn->type == TFUNCTION) {
+        Obj *body = fn->body;
+        Obj *params = fn->params;
+        Obj *eargs = eval_list(env, args);
+        Obj *newenv = push_env(fn->env, params, eargs);
+        return progn(newenv, body);
     }
     error("not supported");
 }
 
 // Searches for a variable by symbol. Returns null if not found.
-static Obj *find(Obj **env, Obj *sym) {
-    for (Obj *p = *env; p; p = p->up) {
+static Obj *find(Obj *env, Obj *sym) {
+    for (Obj *p = env; p; p = p->up) {
         for (Obj *cell = p->vars; cell != Nil; cell = cell->cdr) {
             Obj *bind = cell->car;
             if (sym == bind->car)
@@ -688,51 +431,48 @@ static Obj *find(Obj **env, Obj *sym) {
 }
 
 // Expands the given macro application form.
-static Obj *macroexpand(Obj **root, Obj **env, Obj **obj) {
-    if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
-        return *obj;
-    DEFINE5(bind, args, body, params, newenv);
-    *bind = find(env, (*obj)->car);
-    if (!*bind || (*bind)->cdr->type != TMACRO)
-        return *obj;
-    *args = (*obj)->cdr;
-    *body = (*bind)->cdr->body;
-    *params = (*bind)->cdr->params;
-    *newenv = push_env(root, env, params, args);
-    return progn(root, newenv, body);
+static Obj *macroexpand(Obj *env, Obj *obj) {
+    if (obj->type != TCELL || obj->car->type != TSYMBOL)
+        return obj;
+    Obj *bind = find(env, obj->car);
+    if (!bind || bind->cdr->type != TMACRO)
+        return obj;
+    Obj *args = obj->cdr;
+    Obj *body = bind->cdr->body;
+    Obj *params = bind->cdr->params;
+    Obj *newenv = push_env(env, params, args);
+    return progn(newenv, body);
 }
 
 // Evaluates the S expression.
-static Obj *eval(Obj **root, Obj **env, Obj **obj) {
-    switch ((*obj)->type) {
+static Obj *eval(Obj *env, Obj *obj) {
+    switch (obj->type) {
     case TINT:
     case TPRIMITIVE:
     case TFUNCTION:
     case TSPECIAL:
         // Self-evaluating objects
-        return *obj;
+        return obj;
     case TSYMBOL: {
         // Variable
-        Obj *bind = find(env, *obj);
+        Obj *bind = find(env, obj);
         if (!bind)
-            error("Undefined symbol: %s", (*obj)->name);
+            error("Undefined symbol: %s", obj->name);
         return bind->cdr;
     }
     case TCELL: {
         // Function application form
-        DEFINE3(fn, expanded, args);
-        *expanded = macroexpand(root, env, obj);
-        if (*expanded != *obj)
-            return eval(root, env, expanded);
-        *fn = (*obj)->car;
-        *fn = eval(root, env, fn);
-        *args = (*obj)->cdr;
-        if ((*fn)->type != TPRIMITIVE && (*fn)->type != TFUNCTION)
+        Obj *expanded = macroexpand(env, obj);
+        if (expanded != obj)
+            return eval(env, expanded);
+        Obj *fn = eval(env, obj->car);
+        Obj *args = obj->cdr;
+        if (fn->type != TPRIMITIVE && fn->type != TFUNCTION)
             error("The head of a list must be a function");
-        return apply(root, env, fn, args);
+        return apply(env, fn, args);
     }
     default:
-        error("Bug: eval: Unknown tag type: %d", (*obj)->type);
+        error("Bug: eval: Unknown tag type: %d", obj->type);
     }
 }
 
@@ -741,201 +481,166 @@ static Obj *eval(Obj **root, Obj **env, Obj **obj) {
 //======================================================================
 
 // 'expr
-static Obj *prim_quote(Obj **root, Obj **env, Obj **list) {
-    if (list_length(*list) != 1)
+static Obj *prim_quote(Obj *env, Obj *list) {
+    if (list_length(list) != 1)
         error("Malformed quote");
-    return (*list)->car;
+    return list->car;
 }
 
 // (list expr ...)
-static Obj *prim_list(Obj **root, Obj **env, Obj **list) {
-    return eval_list(root, env, list);
+static Obj *prim_list(Obj *env, Obj *list) {
+    return eval_list(env, list);
 }
 
 // (setq <symbol> expr)
-static Obj *prim_setq(Obj **root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
+static Obj *prim_setq(Obj *env, Obj *list) {
+    if (list_length(list) != 2 || list->car->type != TSYMBOL)
         error("Malformed setq");
-    DEFINE2(bind, value);
-    *bind = find(env, (*list)->car);
-    if (!*bind)
-        error("Unbound variable %s", (*list)->car->name);
-    *value = (*list)->cdr->car;
-    *value = eval(root, env, value);
-    (*bind)->cdr = *value;
-    return *value;
+    Obj *bind = find(env, list->car);
+    if (!bind)
+        error("Unbound variable %s", list->car->name);
+    Obj *value = eval(env, list->cdr->car);
+    bind->cdr = value;
+    return value;
 }
 
 // (+ <integer> ...)
-static Obj *prim_plus(Obj **root, Obj **env, Obj **list) {
-    DEFINE1(args);
+static Obj *prim_plus(Obj *env, Obj *list) {
     int sum = 0;
-    for (*args = eval_list(root, env, list); *args != Nil; *args = (*args)->cdr) {
-        if ((*args)->car->type != TINT)
+    for (Obj *args = eval_list(env, list); args != Nil; args = args->cdr) {
+        if (args->car->type != TINT)
             error("+ takes only numbers");
-        sum += (*args)->car->value;
+        sum += args->car->value;
     }
-    return make_int(root, sum);
+    return make_int(sum);
 }
 
-static Obj *handle_function(Obj **root, Obj **env, Obj **list, int type) {
-    if ((*list)->type != TCELL || !is_list((*list)->car) || (*list)->cdr->type != TCELL)
+static Obj *handle_function(Obj *env, Obj *list, int type) {
+    if (list->type != TCELL || !is_list(list->car) || list->cdr->type != TCELL)
         error("Malformed lambda");
-    for (Obj *p = (*list)->car; p != Nil; p = p->cdr) {
+    for (Obj *p = list->car; p != Nil; p = p->cdr) {
         if (p->car->type != TSYMBOL)
             error("Parameter must be a symbol");
         if (!is_list(p->cdr))
             error("Parameter list is not a flat list");
     }
-    DEFINE2(car, cdr);
-    *car = (*list)->car;
-    *cdr = (*list)->cdr;
-    return make_function(root, type, car, cdr, env);
+    Obj *car = list->car;
+    Obj *cdr = list->cdr;
+    return make_function(type, car, cdr, env);
 }
 
 // (lambda (<symbol> ...) expr ...)
-static Obj *prim_lambda(Obj **root, Obj **env, Obj **list) {
-    return handle_function(root, env, list, TFUNCTION);
+static Obj *prim_lambda(Obj *env, Obj *list) {
+    return handle_function(env, list, TFUNCTION);
 }
 
-static Obj *handle_defun(Obj **root, Obj **env, Obj **list, int type) {
-    if ((*list)->car->type != TSYMBOL || (*list)->cdr->type != TCELL)
+static Obj *handle_defun(Obj *env, Obj *list, int type) {
+    if (list->car->type != TSYMBOL || list->cdr->type != TCELL)
         error("Malformed defun");
-    DEFINE3(fn, sym, rest);
-    *sym = (*list)->car;
-    *rest = (*list)->cdr;
-    *fn = handle_function(root, env, rest, type);
-    add_variable(root, env, sym, fn);
-    return *fn;
+    Obj *sym = list->car;
+    Obj *rest = list->cdr;
+    Obj *fn = handle_function(env, rest, type);
+    add_variable(env, sym, fn);
+    return fn;
 }
 
 // (defun <symbol> (<symbol> ...) expr ...)
-static Obj *prim_defun(Obj **root, Obj **env, Obj **list) {
-    return handle_defun(root, env, list, TFUNCTION);
+static Obj *prim_defun(Obj *env, Obj *list) {
+    return handle_defun(env, list, TFUNCTION);
 }
 
 // (define <symbol> expr)
-static Obj *prim_define(Obj **root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
+static Obj *prim_define(Obj *env, Obj *list) {
+    if (list_length(list) != 2 || list->car->type != TSYMBOL)
         error("Malformed setq");
-    DEFINE2(sym, value);
-    *sym = (*list)->car;
-    *value = (*list)->cdr->car;
-    *value = eval(root, env, value);
-    add_variable(root, env, sym, value);
-    return *value;
+    Obj *sym = list->car;
+    Obj *value = eval(env, list->cdr->car);
+    add_variable(env, sym, value);
+    return value;
 }
 
 // (defmacro <symbol> (<symbol> ...) expr ...)
-static Obj *prim_defmacro(Obj **root, Obj **env, Obj **list) {
-    return handle_defun(root, env, list, TMACRO);
+static Obj *prim_defmacro(Obj *env, Obj *list) {
+    return handle_defun(env, list, TMACRO);
 }
 
 // (macroexpand expr)
-static Obj *prim_macroexpand(Obj **root, Obj **env, Obj **list) {
-    if (list_length(*list) != 1)
+static Obj *prim_macroexpand(Obj *env, Obj *list) {
+    if (list_length(list) != 1)
         error("Malformed macroexpand");
-    DEFINE1(body);
-    *body = (*list)->car;
-    return macroexpand(root, env, body);
+    Obj *body = list->car;
+    return macroexpand(env, body);
 }
 
 // (println expr)
-static Obj *prim_println(Obj **root, Obj **env, Obj **list) {
-    DEFINE1(tmp);
-    *tmp = (*list)->car;
-    print(eval(root, env, tmp));
+static Obj *prim_println(Obj *env, Obj *list) {
+    print(eval(env, list->car));
     printf("\n");
     return Nil;
 }
 
 // (if expr expr expr ...)
-static Obj *prim_if(Obj **root, Obj **env, Obj **list) {
-    if (list_length(*list) < 2)
+static Obj *prim_if(Obj *env, Obj *list) {
+    if (list_length(list) < 2)
         error("Malformed if");
-    DEFINE3(cond, then, els);
-    *cond = (*list)->car;
-    *cond = eval(root, env, cond);
-    if (*cond != Nil) {
-        *then = (*list)->cdr->car;
-        return eval(root, env, then);
+    Obj *cond = eval(env, list->car);
+    if (cond != Nil) {
+        Obj *then = list->cdr->car;
+        return eval(env, then);
     }
-    *els = (*list)->cdr->cdr;
-    return *els == Nil ? Nil : progn(root, env, els);
+    Obj *els = list->cdr->cdr;
+    return els == Nil ? Nil : progn(env, els);
 }
 
 // (= <integer> <integer>)
-static Obj *prim_num_eq(Obj **root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2)
+static Obj *prim_num_eq(Obj *env, Obj *list) {
+    if (list_length(list) != 2)
         error("Malformed =");
-    DEFINE1(values);
-    *values = eval_list(root, env, list);
-    Obj *x = (*values)->car;
-    Obj *y = (*values)->cdr->car;
+    Obj *values = eval_list(env, list);
+    Obj *x = values->car;
+    Obj *y = values->cdr->car;
     if (x->type != TINT || y->type != TINT)
         error("= only takes numbers");
     return x->value == y->value ? True : Nil;
 }
 
-// (gc)
-static Obj *prim_gc(Obj **root, Obj **env, Obj **list) {
-    gc(root);
-    return Nil;
-}
-
 // (exit)
-static Obj *prim_exit(Obj **root, Obj **env, Obj **list) {
+static Obj *prim_exit(Obj *env, Obj *list) {
     exit(0);
 }
 
-static void add_primitive(Obj **root, Obj **env, char *name, Primitive *fn) {
-    DEFINE2(sym, prim);
-    *sym = intern(root, name);
-    *prim = make_primitive(root, fn);
-    add_variable(root, env, sym, prim);
+static void add_primitive(Obj *env, char *name, Primitive *fn) {
+    Obj *sym = intern(name);
+    Obj *prim = make_primitive(fn);
+    add_variable(env, sym, prim);
 }
 
-static void define_constants(Obj **root, Obj **env) {
-    DEFINE1(sym);
-    *sym = intern(root, "t");
-    add_variable(root, env, sym, &True);
+static void define_constants(Obj *env) {
+    Obj *sym = intern("t");
+    add_variable(env, sym, True);
 }
 
-static void define_primitives(Obj **root, Obj **env) {
-    add_primitive(root, env, "quote", prim_quote);
-    add_primitive(root, env, "list", prim_list);
-    add_primitive(root, env, "setq", prim_setq);
-    add_primitive(root, env, "+", prim_plus);
-    add_primitive(root, env, "define", prim_define);
-    add_primitive(root, env, "defun", prim_defun);
-    add_primitive(root, env, "defmacro", prim_defmacro);
-    add_primitive(root, env, "macroexpand", prim_macroexpand);
-    add_primitive(root, env, "lambda", prim_lambda);
-    add_primitive(root, env, "if", prim_if);
-    add_primitive(root, env, "=", prim_num_eq);
-    add_primitive(root, env, "println", prim_println);
-    add_primitive(root, env, "gc", prim_gc);
-    add_primitive(root, env, "exit", prim_exit);
+static void define_primitives(Obj *env) {
+    add_primitive(env, "quote", prim_quote);
+    add_primitive(env, "list", prim_list);
+    add_primitive(env, "setq", prim_setq);
+    add_primitive(env, "+", prim_plus);
+    add_primitive(env, "define", prim_define);
+    add_primitive(env, "defun", prim_defun);
+    add_primitive(env, "defmacro", prim_defmacro);
+    add_primitive(env, "macroexpand", prim_macroexpand);
+    add_primitive(env, "lambda", prim_lambda);
+    add_primitive(env, "if", prim_if);
+    add_primitive(env, "=", prim_num_eq);
+    add_primitive(env, "println", prim_println);
+    add_primitive(env, "exit", prim_exit);
 }
 
 //======================================================================
 // Entry point
 //======================================================================
 
-// Returns true if the environment variable is defined and not the empty string.
-static bool getEnvFlag(char *name) {
-    char *val = getenv(name);
-    return val && val[0];
-}
-
 int main(int argc, char **argv) {
-    // Debug flags
-    debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
-    always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
-
-    // Memory allocation
-    memory = alloc_semispace();
-
     // Constants and primitives
     Nil = make_special(TNIL);
     Dot = make_special(TDOT);
@@ -943,23 +648,21 @@ int main(int argc, char **argv) {
     True = make_special(TTRUE);
     Symbols = Nil;
 
-    Obj **root = NULL;
-    DEFINE2(env, expr);
-    *env = make_env(root, &Nil, env);
+    Obj *env = make_env(Nil, NULL);
 
-    define_constants(root, env);
-    define_primitives(root, env);
+    define_constants(env);
+    define_primitives(env);
 
     // The main loop
     for (;;) {
-        *expr = read(root);
-        if (!*expr)
+        Obj *expr = read();
+        if (!expr)
             return 0;
-        if (*expr == Cparen)
+        if (expr == Cparen)
             error("Stray close parenthesis");
-        if (*expr == Dot)
+        if (expr == Dot)
             error("Stray dot");
-        print(eval(root, env, expr));
+        print(eval(env, expr));
         printf("\n");
     }
 }
