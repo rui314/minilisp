@@ -28,6 +28,7 @@ function run() {
   echo ok
 }
 
+# Basic data types
 run integer 1 1
 run integer -1 -1
 run symbol a "'a"
@@ -41,16 +42,19 @@ run list "(a b c)" "(list 'a 'b 'c)"
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
 
+# Comments
 run comment 5 "
   ; 2
   5 ; 3"
 
+# Global variables
 run define 7 '(define x 7) x'
 run define 10 '(define x 7) (+ x 3)'
 run define 7 '(define + 7) +'
 run setq 11 '(define x 7) (setq x 11) x'
 run setq 17 '(setq + 17) +'
 
+# Conditionals
 run if a "(if 1 'a)"
 run if '()' "(if () 'a)"
 run if a "(if 1 'a 'b)"
@@ -59,14 +63,30 @@ run if a "(if 'x 'a 'b)"
 run if b "(if () 'a 'b)"
 run if c "(if () 'a 'b 'c)"
 
+# Numeric comparisons
 run = t '(= 3 3)'
 run = '()' '(= 3 2)'
 
+# Functions
 run lambda '<function>' '(lambda (x) x)'
 run lambda t '((lambda () t))'
 run lambda 9 '((lambda (x) (+ x x x)) 3)'
 run defun 12 '(defun double (x) (+ x x)) (double 6)'
 
+# Lexical closures
+run closure 3 '(defun call (f) ((lambda (var) (f)) 5))
+  ((lambda (var) (call (lambda () var))) 3)'
+
+run counter 3 '
+  (define counter
+    ((lambda (val)
+       (lambda () (setq val (+ val 1)) val))
+     0))
+  (counter)
+  (counter)
+  (counter)'
+
+# Macros
 run macro 42 "
   (defmacro if-zero (x then) (list 'if (list '= x 0) then))
   (if-zero 0 42)"

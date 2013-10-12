@@ -3,7 +3,7 @@ MiniLisp
 
 This is an implementation of Lisp in less than 1k lines of C. This language
 can't do anything other than a simple math, but should be interesting to those
-who want to see how dynamic scoping, macro system, and copying GC can be
+who want to see how lexical scoping, macro system, and copying GC can be
 implemented in C. The code is heavily commented to help the reader understand
 how it works.
 

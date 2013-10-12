@@ -25,6 +25,7 @@ enum {
     TFUNCTION,
     TMACRO,
     TSPECIAL,
+    TENV,
     // The marker that indicates the object has been moved to other location by GC. The new location
     // can be found at the forwarding pointer. Only the functions to do garbage collection set and
     // handle the object of this type. Other functions will never see the object of this type.
@@ -41,14 +42,8 @@ enum {
 
 struct Obj;
 
-// The association lists containing the mapping from symbols to their value if the symbol is
-// evaluated as variable. This data strucutre is usually called the environment frame.
-typedef struct Env {
-    struct Obj *vars;
-    struct Env *next;
-} Env;
-
-typedef struct Obj *Primitive(Env *env, struct Obj **root, struct Obj **args);
+// Typedef for the primitive function.
+typedef struct Obj *Primitive(struct Obj **root, struct Obj **env, struct Obj **args);
 
 // The object type
 typedef struct Obj {
@@ -77,9 +72,16 @@ typedef struct Obj {
         struct {
             struct Obj *params;
             struct Obj *body;
+            struct Obj *env;
         };
         // Subtype for special type
         int subtype;
+        // Environment frame. This is a linked list of association lists
+        // containing the mapping from symbols to their value.
+        struct {
+            struct Obj *vars;
+            struct Obj *up;
+        };
         // Forwarding pointer
         void *moved;
     };
@@ -107,7 +109,7 @@ static bool debug_gc = false;
 static bool always_gc = false;
 
 static void error(char *fmt, ...) __attribute((noreturn));
-static void gc(Env *env, Obj **root);
+static void gc(Obj **root);
 
 //======================================================================
 // Memory management
@@ -179,7 +181,7 @@ static inline size_t roundup(size_t var, size_t size) {
 }
 
 // Allocates memory block. This may start GC if we don't have enough memory.
-static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
+static Obj *alloc(Obj **root, int type, size_t size) {
     // The object must be large enough to contain a pointer for the forwarding pointer. Make it
     // larger if it's smaller than that.
     size = roundup(size, sizeof(void *));
@@ -198,11 +200,11 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
     // reference to a Lisp object, the pointer will become invalid by this GC call. Dereferencing
     // that will immediately cause SEGV.
     if (always_gc && !gc_running)
-        gc(env, root);
+        gc(root);
 
     // Otherwise, run GC only when the available memory is not large enough.
     if (!always_gc && MEMORY_SIZE < mem_nused + size)
-        gc(env, root);
+        gc(root);
 
     // Terminate the program if we couldn't satisfy the memory request. This can happen if the
     // requested size was too large or the from-space was filled with too many live objects.
@@ -221,29 +223,30 @@ static Obj *alloc(Env *env, Obj **root, int type, size_t size) {
 // Constructors
 //======================================================================
 
-static Obj *make_int(Env *env, Obj **root, int value) {
-    Obj *r = alloc(env, root, TINT, sizeof(int));
+static Obj *make_int(Obj **root, int value) {
+    Obj *r = alloc(root, TINT, sizeof(int));
     r->value = value;
     return r;
 }
 
-static Obj *make_symbol(Env *env, Obj **root, char *name) {
-    Obj *sym = alloc(env, root, TSYMBOL, strlen(name) + 1);
+static Obj *make_symbol(Obj **root, char *name) {
+    Obj *sym = alloc(root, TSYMBOL, strlen(name) + 1);
     strcpy(sym->name, name);
     return sym;
 }
 
-static Obj *make_primitive(Env *env, Obj **root, Primitive *fn) {
-    Obj *r = alloc(env, root, TPRIMITIVE, sizeof(Primitive *));
+static Obj *make_primitive(Obj **root, Primitive *fn) {
+    Obj *r = alloc(root, TPRIMITIVE, sizeof(Primitive *));
     r->fn = fn;
     return r;
 }
 
-static Obj *make_function(Env *env, Obj **root, int type, Obj **params, Obj **body) {
+static Obj *make_function(Obj **root, int type, Obj **params, Obj **body, Obj **env) {
     assert(type == TFUNCTION || type == TMACRO);
-    Obj *r = alloc(env, root, type, sizeof(Obj *) * 2);
+    Obj *r = alloc(root, type, sizeof(Obj *) * 3);
     r->params = *params;
     r->body = *body;
+    r->env = *env;
     return r;
 }
 
@@ -254,18 +257,25 @@ static Obj *make_special(int subtype) {
     return r;
 }
 
-static Obj *cons(Env *env, Obj **root, Obj **car, Obj **cdr) {
-    Obj *cell = alloc(env, root, TCELL, sizeof(Obj *) * 2);
+struct Obj *make_env(Obj **root, Obj **vars, Obj **up) {
+    Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
+    r->vars = *vars;
+    r->up = *up;
+    return r;
+}
+
+static Obj *cons(Obj **root, Obj **car, Obj **cdr) {
+    Obj *cell = alloc(root, TCELL, sizeof(Obj *) * 2);
     cell->car = *car;
     cell->cdr = *cdr;
     return cell;
 }
 
 // Returns ((x . y) . a)
-static Obj *acons(Env *env, Obj **root, Obj **x, Obj **y, Obj **a) {
+static Obj *acons(Obj **root, Obj **x, Obj **y, Obj **a) {
     DEFINE1(cell);
-    *cell = cons(env, root, x, y);
-    return cons(env, root, cell, a);
+    *cell = cons(root, x, y);
+    return cons(root, cell, a);
 }
 
 //======================================================================
@@ -315,11 +325,8 @@ void *alloc_semispace() {
 }
 
 // Copies the root objects.
-static void forward_root_objects(Env *env, Obj **root) {
-    for (Env *frame = env; frame; frame = frame->next)
-        frame->vars = forward(frame->vars);
+static void forward_root_objects(Obj **root) {
     Symbols = forward(Symbols);
-
     for (Obj **rp = root; rp; rp = *(Obj ***)rp)
         for (Obj **ptr = rp + 2; *ptr != ROOT_END; ptr++)
             if (*ptr)
@@ -328,7 +335,7 @@ static void forward_root_objects(Env *env, Obj **root) {
 
 // Implements Cheney's copying garbage collection algorithm.
 // http://en.wikipedia.org/wiki/Cheney%27s_algorithm
-static void gc(Env *env, Obj **root) {
+static void gc(Obj **root) {
     assert(!gc_running);
     gc_running = true;
     if (debug_gc)
@@ -344,7 +351,7 @@ static void gc(Env *env, Obj **root) {
     scan1 = scan2 = memory;
 
     // Copy the GC root objects first. This moves the pointer scan2.
-    forward_root_objects(env, root);
+    forward_root_objects(root);
 
     // Copy the objects referenced by the GC root objects located between scan1 and scan2. Once it's
     // finished, all live objects (i.e. objects reachable from the root) will have been copied to
@@ -364,6 +371,12 @@ static void gc(Env *env, Obj **root) {
         case TMACRO:
             scan1->params = forward(scan1->params);
             scan1->body = forward(scan1->body);
+            scan1->env = forward(scan1->env);
+            break;
+        case TENV:
+            scan1->vars = forward(scan1->vars);
+            if (scan1->up)
+                scan1->up = forward(scan1->up);
             break;
         default:
             error("Bug: copy: unknown type %d", scan1->type);
@@ -387,7 +400,7 @@ static void gc(Env *env, Obj **root) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
-static Obj *read(Env *env, Obj **root);
+static Obj *read(Obj **root);
 
 static void error(char *fmt, ...) {
     va_list ap;
@@ -419,32 +432,32 @@ static void skip_line(void) {
 }
 
 // Reads a list. Note that '(' has already been read.
-static Obj *read_list(Env *env, Obj **root) {
+static Obj *read_list(Obj **root) {
     DEFINE4(obj, head, tail, tmp);
-    *obj = read(env, root);
+    *obj = read(root);
     if (!*obj)
         error("Unclosed parenthesis");
     if (*obj == Dot)
         error("Stray dot");
     if (*obj == Cparen)
         return Nil;
-    *head = *tail = cons(env, root, obj, &Nil);
+    *head = *tail = cons(root, obj, &Nil);
 
     for (;;) {
-        *obj = read(env, root);
+        *obj = read(root);
         if (!*obj)
             error("Unclosed parenthesis");
         if (*obj == Cparen)
             return *head;
         if (*obj == Dot) {
-            *tmp = read(env, root);
+            *tmp = read(root);
             (*tail)->cdr = *tmp;
-            *obj = read(env, root);
+            *obj = read(root);
             if (*obj != Cparen)
                 error("Closed parenthesis expected after dot");
             return *head;
         }
-        *tmp = cons(env, root, obj, &Nil);
+        *tmp = cons(root, obj, &Nil);
         (*tail)->cdr = *tmp;
         *tail = (*tail)->cdr;
     }
@@ -452,23 +465,23 @@ static Obj *read_list(Env *env, Obj **root) {
 
 // May create a new symbol. If there's a symbol with the same name, it will not create a new symbol
 // but return the existing one.
-static Obj *intern(Env *env, Obj **root, char *name) {
+static Obj *intern(Obj **root, char *name) {
     for (Obj *p = Symbols; p != Nil; p = p->cdr)
         if (strcmp(name, p->car->name) == 0)
             return p->car;
     DEFINE1(sym);
-    *sym = make_symbol(env, root, name);
-    Symbols = cons(env, root, sym, &Symbols);
+    *sym = make_symbol(root, name);
+    Symbols = cons(root, sym, &Symbols);
     return *sym;
 }
 
 // Reader marcro ' (single quote). It reads an expression and returns (quote <expr>).
-static Obj *read_quote(Env *env, Obj **root) {
+static Obj *read_quote(Obj **root) {
     DEFINE2(sym, tmp);
-    *sym = intern(env, root, "quote");
-    *tmp = read(env, root);
-    *tmp = cons(env, root, tmp, &Nil);
-    *tmp = cons(env, root, sym, tmp);
+    *sym = intern(root, "quote");
+    *tmp = read(root);
+    *tmp = cons(root, tmp, &Nil);
+    *tmp = cons(root, sym, tmp);
     return *tmp;
 }
 
@@ -480,7 +493,7 @@ static int read_number(int val) {
 
 #define SYMBOL_MAX_LEN 200
 
-static Obj *read_symbol(Env *env, Obj **root, char c) {
+static Obj *read_symbol(Obj **root, char c) {
     char buf[SYMBOL_MAX_LEN + 1];
     int len = 1;
     buf[0] = c;
@@ -490,10 +503,10 @@ static Obj *read_symbol(Env *env, Obj **root, char c) {
         buf[len++] = getchar();
     }
     buf[len] = '\0';
-    return intern(env, root, buf);
+    return intern(root, buf);
 }
 
-static Obj *read(Env *env, Obj **root) {
+static Obj *read(Obj **root) {
     for (;;) {
         int c = getchar();
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t')
@@ -505,19 +518,19 @@ static Obj *read(Env *env, Obj **root) {
             continue;
         }
         if (c == '(')
-            return read_list(env, root);
+            return read_list(root);
         if (c == ')')
             return Cparen;
         if (c == '.')
             return Dot;
         if (c == '\'')
-            return read_quote(env, root);
+            return read_quote(root);
         if (isdigit(c))
-            return make_int(env, root, read_number(c - '0'));
+            return make_int(root, read_number(c - '0'));
         if (c == '-')
-            return make_int(env, root, -read_number(0));
+            return make_int(root, -read_number(0));
         if (isalpha(c) || strchr("+=!@#$%^&*", c))
-            return read_symbol(env, root, c);
+            return read_symbol(root, c);
         error("Don't know how to handle %c", c);
     }
 }
@@ -588,14 +601,17 @@ static int list_length(Obj *list) {
 // Evaluator
 //======================================================================
 
-static Obj *eval(Env *env, Obj **root, Obj **obj);
+static Obj *eval(Obj **root, Obj **env, Obj **obj);
 
-static void add_variable(Env *env, Obj **root, Obj **sym, Obj **val) {
-    env->vars = acons(env, root, sym, val, &env->vars);
+static void add_variable(Obj **root, Obj **env, Obj **sym, Obj **val) {
+    DEFINE2(vars, tmp);
+    *vars = (*env)->vars;
+    *tmp = acons(root, sym, val, vars);
+    (*env)->vars = *tmp;
 }
 
 // Returns a newly created environment frame.
-static Env push_env(Env *env, Obj **root, Obj **vars, Obj **values) {
+static Obj *push_env(Obj **root, Obj **env, Obj **vars, Obj **values) {
     if (list_length(*vars) != list_length(*values))
         error("Cannot apply function: number of argument does not match");
     DEFINE5(p, q, sym, val, map);
@@ -603,32 +619,31 @@ static Env push_env(Env *env, Obj **root, Obj **vars, Obj **values) {
     for (p = vars, q = values; *p != Nil; *p = (*p)->cdr, *q = (*q)->cdr) {
         *sym = (*p)->car;
         *val = (*q)->car;
-        *map = acons(env, root, sym, val, map);
+        *map = acons(root, sym, val, map);
     }
-    Env r = { *map, env };
-    return r;
+    return make_env(root, map, env);
 }
 
 // Evaluates the list elements from head and returns the last return value.
-static Obj *progn(Env *env, Obj **root, Obj **list) {
+static Obj *progn(Obj **root, Obj **env, Obj **list) {
     DEFINE2(lp, r);
     for (*lp = *list; *lp != Nil; *lp = (*lp)->cdr) {
         *r = (*lp)->car;
-        *r = eval(env, root, r);
+        *r = eval(root, env, r);
     }
     return *r;
 }
 
 // Evaluates all the list elements and returns their return values as a new list.
-static Obj *eval_list(Env *env, Obj **root, Obj **list) {
+static Obj *eval_list(Obj **root, Obj **env, Obj **list) {
     DEFINE4(head, tail, lp, tmp);
     for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
         *tmp = (*lp)->car;
-        *tmp = eval(env, root, tmp);
+        *tmp = eval(root, env, tmp);
         if (*head == NULL) {
-            *head = *tail = cons(env, root, tmp, &Nil);
+            *head = *tail = cons(root, tmp, &Nil);
         } else {
-            *tmp = cons(env, root, tmp, &Nil);
+            *tmp = cons(root, tmp, &Nil);
             (*tail)->cdr = *tmp;
             *tail = (*tail)->cdr;
         }
@@ -643,26 +658,27 @@ static bool is_list(Obj *obj) {
 }
 
 // Apply fn with args.
-static Obj *apply(Env *env, Obj **root, Obj **fn, Obj **args) {
+static Obj *apply(Obj **root, Obj **env, Obj **fn, Obj **args) {
     if (!is_list(*args))
         error("argument must be a list");
     if ((*fn)->type == TPRIMITIVE)
-        return (*fn)->fn(env, root, args);
+        return (*fn)->fn(root, env, args);
     if ((*fn)->type == TFUNCTION) {
-        DEFINE3(body, params, eargs);
+        DEFINE4(body, params, eargs, newenv);
         *body = (*fn)->body;
         *params = (*fn)->params;
-        *eargs = eval_list(env, root, args);
-        Env newenv = push_env(env, root, params, eargs);
-        return progn(&newenv, root, body);
+        *eargs = eval_list(root, env, args);
+        *newenv = (*fn)->env;
+        *newenv = push_env(root, newenv, params, eargs);
+        return progn(root, newenv, body);
     }
     error("not supported");
 }
 
 // Searches for a variable by name. Returns null if not found.
-static Obj *find(Env *env, char *name) {
-    for (; env; env = env->next) {
-        for (Obj *cell = env->vars; cell != Nil; cell = cell->cdr) {
+static Obj *find(Obj **env, char *name) {
+    for (Obj *p = *env; p; p = p->up) {
+        for (Obj *cell = p->vars; cell != Nil; cell = cell->cdr) {
             Obj *bind = cell->car;
             char *varname = bind->car->name;
             if (strcmp(name, varname) == 0)
@@ -673,23 +689,22 @@ static Obj *find(Env *env, char *name) {
 }
 
 // Expands the given macro application form.
-static Obj *macroexpand(Env *env, Obj **root, Obj **obj) {
+static Obj *macroexpand(Obj **root, Obj **env, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
-    DEFINE5(bind, macro, args, body, params);
+    DEFINE5(bind, args, body, params, newenv);
     *bind = find(env, (*obj)->car->name);
     if (!*bind || (*bind)->cdr->type != TMACRO)
         return *obj;
-    *macro = (*bind)->cdr;
     *args = (*obj)->cdr;
-    *body = (*macro)->body;
-    *params = (*macro)->params;
-    Env newenv = push_env(env, root, params, args);
-    return progn(&newenv, root, body);
+    *body = (*bind)->cdr->body;
+    *params = (*bind)->cdr->params;
+    *newenv = push_env(root, env, params, args);
+    return progn(root, newenv, body);
 }
 
 // Evaluates the S expression.
-static Obj *eval(Env *env, Obj **root, Obj **obj) {
+static Obj *eval(Obj **root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
     case TINT:
     case TPRIMITIVE:
@@ -707,15 +722,15 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
     case TCELL: {
         // Function application form
         DEFINE3(fn, expanded, args);
-        *expanded = macroexpand(env, root, obj);
+        *expanded = macroexpand(root, env, obj);
         if (*expanded != *obj)
-            return eval(env, root, expanded);
+            return eval(root, env, expanded);
         *fn = (*obj)->car;
-        *fn = eval(env, root, fn);
+        *fn = eval(root, env, fn);
         *args = (*obj)->cdr;
         if ((*fn)->type != TPRIMITIVE && (*fn)->type != TFUNCTION)
             error("The head of a list must be a function");
-        return apply(env, root, fn, args);
+        return apply(root, env, fn, args);
     }
     default:
         error("Bug: eval: Unknown tag type: %d", (*obj)->type);
@@ -727,19 +742,19 @@ static Obj *eval(Env *env, Obj **root, Obj **obj) {
 //======================================================================
 
 // 'expr
-static Obj *prim_quote(Env *env, Obj **root, Obj **list) {
+static Obj *prim_quote(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) != 1)
         error("Malformed quote");
     return (*list)->car;
 }
 
 // (list expr ...)
-static Obj *prim_list(Env *env, Obj **root, Obj **list) {
-    return eval_list(env, root, list);
+static Obj *prim_list(Obj **root, Obj **env, Obj **list) {
+    return eval_list(root, env, list);
 }
 
 // (setq <symbol> expr)
-static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
+static Obj *prim_setq(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed setq");
     DEFINE2(bind, value);
@@ -747,24 +762,24 @@ static Obj *prim_setq(Env *env, Obj **root, Obj **list) {
     if (!*bind)
         error("Unbound variable %s", (*list)->car->name);
     *value = (*list)->cdr->car;
-    *value = eval(env, root, value);
+    *value = eval(root, env, value);
     (*bind)->cdr = *value;
     return *value;
 }
 
 // (+ <integer> ...)
-static Obj *prim_plus(Env *env, Obj **root, Obj **list) {
+static Obj *prim_plus(Obj **root, Obj **env, Obj **list) {
     DEFINE1(args);
     int sum = 0;
-    for (*args = eval_list(env, root, list); *args != Nil; *args = (*args)->cdr) {
+    for (*args = eval_list(root, env, list); *args != Nil; *args = (*args)->cdr) {
         if ((*args)->car->type != TINT)
             error("+ takes only numbers");
         sum += (*args)->car->value;
     }
-    return make_int(env, root, sum);
+    return make_int(root, sum);
 }
 
-static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
+static Obj *handle_function(Obj **root, Obj **env, Obj **list, int type) {
     if ((*list)->type != TCELL || !is_list((*list)->car) || (*list)->cdr->type != TCELL)
         error("Malformed lambda");
     for (Obj *p = (*list)->car; p != Nil; p = p->cdr) {
@@ -776,86 +791,86 @@ static Obj *handle_function(Env *env, Obj **root, Obj **list, int type) {
     DEFINE2(car, cdr);
     *car = (*list)->car;
     *cdr = (*list)->cdr;
-    return make_function(env, root, type, car, cdr);
+    return make_function(root, type, car, cdr, env);
 }
 
 // (lambda (<symbol> ...) expr ...)
-static Obj *prim_lambda(Env *env, Obj **root, Obj **list) {
-    return handle_function(env, root, list, TFUNCTION);
+static Obj *prim_lambda(Obj **root, Obj **env, Obj **list) {
+    return handle_function(root, env, list, TFUNCTION);
 }
 
-static Obj *handle_defun(Env *env, Obj **root, Obj **list, int type) {
+static Obj *handle_defun(Obj **root, Obj **env, Obj **list, int type) {
     if ((*list)->car->type != TSYMBOL || (*list)->cdr->type != TCELL)
         error("Malformed defun");
     DEFINE3(fn, sym, rest);
     *sym = (*list)->car;
     *rest = (*list)->cdr;
-    *fn = handle_function(env, root, rest, type);
-    add_variable(env, root, sym, fn);
+    *fn = handle_function(root, env, rest, type);
+    add_variable(root, env, sym, fn);
     return *fn;
 }
 
 // (defun <symbol> (<symbol> ...) expr ...)
-static Obj *prim_defun(Env *env, Obj **root, Obj **list) {
-    return handle_defun(env, root, list, TFUNCTION);
+static Obj *prim_defun(Obj **root, Obj **env, Obj **list) {
+    return handle_defun(root, env, list, TFUNCTION);
 }
 
 // (define <symbol> expr)
-static Obj *prim_define(Env *env, Obj **root, Obj **list) {
+static Obj *prim_define(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed setq");
     DEFINE2(sym, value);
     *sym = (*list)->car;
     *value = (*list)->cdr->car;
-    *value = eval(env, root, value);
-    add_variable(env, root, sym, value);
+    *value = eval(root, env, value);
+    add_variable(root, env, sym, value);
     return *value;
 }
 
 // (defmacro <symbol> (<symbol> ...) expr ...)
-static Obj *prim_defmacro(Env *env, Obj **root, Obj **list) {
-    return handle_defun(env, root, list, TMACRO);
+static Obj *prim_defmacro(Obj **root, Obj **env, Obj **list) {
+    return handle_defun(root, env, list, TMACRO);
 }
 
 // (macroexpand expr)
-static Obj *prim_macroexpand(Env *env, Obj **root, Obj **list) {
+static Obj *prim_macroexpand(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) != 1)
         error("Malformed macroexpand");
     DEFINE1(body);
     *body = (*list)->car;
-    return macroexpand(env, root, body);
+    return macroexpand(root, env, body);
 }
 
 // (println expr)
-static Obj *prim_println(Env *env, Obj **root, Obj **list) {
+static Obj *prim_println(Obj **root, Obj **env, Obj **list) {
     DEFINE1(tmp);
     *tmp = (*list)->car;
-    print(eval(env, root, tmp));
+    print(eval(root, env, tmp));
     printf("\n");
     return Nil;
 }
 
 // (if expr expr expr ...)
-static Obj *prim_if(Env *env, Obj **root, Obj **list) {
+static Obj *prim_if(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) < 2)
         error("Malformed if");
     DEFINE3(cond, then, els);
     *cond = (*list)->car;
-    *cond = eval(env, root, cond);
+    *cond = eval(root, env, cond);
     if (*cond != Nil) {
         *then = (*list)->cdr->car;
-        return eval(env, root, then);
+        return eval(root, env, then);
     }
     *els = (*list)->cdr->cdr;
-    return *els == Nil ? Nil : progn(env, root, els);
+    return *els == Nil ? Nil : progn(root, env, els);
 }
 
 // (= <integer> <integer>)
-static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
+static Obj *prim_num_eq(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) != 2)
         error("Malformed =");
     DEFINE1(values);
-    *values = eval_list(env, root, list);
+    *values = eval_list(root, env, list);
     Obj *x = (*values)->car;
     Obj *y = (*values)->cdr->car;
     if (x->type != TINT || y->type != TINT)
@@ -864,44 +879,44 @@ static Obj *prim_num_eq(Env *env, Obj **root, Obj **list) {
 }
 
 // (gc)
-static Obj *prim_gc(Env *env, Obj **root, Obj **list) {
-    gc(env, root);
+static Obj *prim_gc(Obj **root, Obj **env, Obj **list) {
+    gc(root);
     return Nil;
 }
 
 // (exit)
-static Obj *prim_exit(Env *env, Obj **root, Obj **list) {
+static Obj *prim_exit(Obj **root, Obj **env, Obj **list) {
     exit(0);
 }
 
-static void add_primitive(Env *env, Obj **root, char *name, Primitive *fn) {
+static void add_primitive(Obj **root, Obj **env, char *name, Primitive *fn) {
     DEFINE2(sym, prim);
-    *sym = intern(env, root, name);
-    *prim = make_primitive(env, root, fn);
-    add_variable(env, root, sym, prim);
+    *sym = intern(root, name);
+    *prim = make_primitive(root, fn);
+    add_variable(root, env, sym, prim);
 }
 
-static void define_constants(Env *env, Obj **root) {
+static void define_constants(Obj **root, Obj **env) {
     DEFINE1(sym);
-    *sym = intern(env, root, "t");
-    add_variable(env, root, sym, &True);
+    *sym = intern(root, "t");
+    add_variable(root, env, sym, &True);
 }
 
-static void define_primitives(Env *env, Obj **root) {
-    add_primitive(env, root, "quote", prim_quote);
-    add_primitive(env, root, "list", prim_list);
-    add_primitive(env, root, "setq", prim_setq);
-    add_primitive(env, root, "+", prim_plus);
-    add_primitive(env, root, "define", prim_define);
-    add_primitive(env, root, "defun", prim_defun);
-    add_primitive(env, root, "defmacro", prim_defmacro);
-    add_primitive(env, root, "macroexpand", prim_macroexpand);
-    add_primitive(env, root, "lambda", prim_lambda);
-    add_primitive(env, root, "if", prim_if);
-    add_primitive(env, root, "=", prim_num_eq);
-    add_primitive(env, root, "println", prim_println);
-    add_primitive(env, root, "gc", prim_gc);
-    add_primitive(env, root, "exit", prim_exit);
+static void define_primitives(Obj **root, Obj **env) {
+    add_primitive(root, env, "quote", prim_quote);
+    add_primitive(root, env, "list", prim_list);
+    add_primitive(root, env, "setq", prim_setq);
+    add_primitive(root, env, "+", prim_plus);
+    add_primitive(root, env, "define", prim_define);
+    add_primitive(root, env, "defun", prim_defun);
+    add_primitive(root, env, "defmacro", prim_defmacro);
+    add_primitive(root, env, "macroexpand", prim_macroexpand);
+    add_primitive(root, env, "lambda", prim_lambda);
+    add_primitive(root, env, "if", prim_if);
+    add_primitive(root, env, "=", prim_num_eq);
+    add_primitive(root, env, "println", prim_println);
+    add_primitive(root, env, "gc", prim_gc);
+    add_primitive(root, env, "exit", prim_exit);
 }
 
 //======================================================================
@@ -930,22 +945,22 @@ int main(int argc, char **argv) {
     Symbols = Nil;
 
     Obj **root = NULL;
-    Env env = { Nil, NULL };
-    DEFINE1(expr);
+    DEFINE2(env, expr);
+    *env = make_env(root, &Nil, env);
 
-    define_constants(&env, root);
-    define_primitives(&env, root);
+    define_constants(root, env);
+    define_primitives(root, env);
 
     // The main loop
     for (;;) {
-        *expr = read(&env, root);
+        *expr = read(root);
         if (!*expr)
             return 0;
         if (*expr == Cparen)
             error("Stray close parenthesis");
         if (*expr == Dot)
             error("Stray dot");
-        print(eval(&env, root, expr));
+        print(eval(root, env, expr));
         printf("\n");
     }
 }
