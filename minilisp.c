@@ -399,7 +399,7 @@ static void gc(void *root) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
-static Obj *read(void *root);
+static Obj *read_expr(void *root);
 
 static void error(char *fmt, ...) {
     va_list ap;
@@ -433,7 +433,7 @@ static void skip_line(void) {
 // Reads a list. Note that '(' has already been read.
 static Obj *read_list(void *root) {
     DEFINE4(obj, head, tail, tmp);
-    *obj = read(root);
+    *obj = read_expr(root);
     if (!*obj)
         error("Unclosed parenthesis");
     if (*obj == Dot)
@@ -443,15 +443,15 @@ static Obj *read_list(void *root) {
     *head = *tail = cons(root, obj, &Nil);
 
     for (;;) {
-        *obj = read(root);
+        *obj = read_expr(root);
         if (!*obj)
             error("Unclosed parenthesis");
         if (*obj == Cparen)
             return *head;
         if (*obj == Dot) {
-            *tmp = read(root);
+            *tmp = read_expr(root);
             (*tail)->cdr = *tmp;
-            *obj = read(root);
+            *obj = read_expr(root);
             if (*obj != Cparen)
                 error("Closed parenthesis expected after dot");
             return *head;
@@ -478,7 +478,7 @@ static Obj *intern(void *root, char *name) {
 static Obj *read_quote(void *root) {
     DEFINE2(sym, tmp);
     *sym = intern(root, "quote");
-    *tmp = read(root);
+    *tmp = read_expr(root);
     *tmp = cons(root, tmp, &Nil);
     *tmp = cons(root, sym, tmp);
     return *tmp;
@@ -505,7 +505,7 @@ static Obj *read_symbol(void *root, char c) {
     return intern(root, buf);
 }
 
-static Obj *read(void *root) {
+static Obj *read_expr(void *root) {
     for (;;) {
         int c = getchar();
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t')
@@ -951,7 +951,7 @@ int main(int argc, char **argv) {
 
     // The main loop
     for (;;) {
-        *expr = read(root);
+        *expr = read_expr(root);
         if (!*expr)
             return 0;
         if (*expr == Cparen)
