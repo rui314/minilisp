@@ -771,12 +771,11 @@ static Obj *prim_setq(void *root, Obj **env, Obj **list) {
 
 // (+ <integer> ...)
 static Obj *prim_plus(void *root, Obj **env, Obj **list) {
-    DEFINE1(args);
     int sum = 0;
-    for (*args = eval_list(root, env, list); *args != Nil; *args = (*args)->cdr) {
-        if ((*args)->car->type != TINT)
+    for (Obj *args = eval_list(root, env, list); args != Nil; args = args->cdr) {
+        if (args->car->type != TINT)
             error("+ takes only numbers");
-        sum += (*args)->car->value;
+        sum += args->car->value;
     }
     return make_int(root, sum);
 }
@@ -871,10 +870,9 @@ static Obj *prim_if(void *root, Obj **env, Obj **list) {
 static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
     if (list_length(*list) != 2)
         error("Malformed =");
-    DEFINE1(values);
-    *values = eval_list(root, env, list);
-    Obj *x = (*values)->car;
-    Obj *y = (*values)->cdr->car;
+    Obj *values = eval_list(root, env, list);
+    Obj *x = values->car;
+    Obj *y = values->cdr->car;
     if (x->type != TINT || y->type != TINT)
         error("= only takes numbers");
     return x->value == y->value ? True : Nil;
@@ -884,9 +882,8 @@ static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
 static Obj *prim_eq(void *root, Obj **env, Obj **list) {
     if (list_length(*list) != 2)
         error("Malformed eq");
-    DEFINE1(values);
-    *values = eval_list(root, env, list);
-    return (*values)->car == (*values)->cdr->car ? True : Nil;
+    Obj *values = eval_list(root, env, list);
+    return values->car == values->cdr->car ? True : Nil;
 }
 
 // (exit)
