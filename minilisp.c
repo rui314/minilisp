@@ -675,13 +675,12 @@ static Obj *apply(Obj **root, Obj **env, Obj **fn, Obj **args) {
     error("not supported");
 }
 
-// Searches for a variable by name. Returns null if not found.
-static Obj *find(Obj **env, char *name) {
+// Searches for a variable by symbol. Returns null if not found.
+static Obj *find(Obj **env, Obj *sym) {
     for (Obj *p = *env; p; p = p->up) {
         for (Obj *cell = p->vars; cell != Nil; cell = cell->cdr) {
             Obj *bind = cell->car;
-            char *varname = bind->car->name;
-            if (strcmp(name, varname) == 0)
+            if (sym == bind->car)
                 return bind;
         }
     }
@@ -693,7 +692,7 @@ static Obj *macroexpand(Obj **root, Obj **env, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
     DEFINE5(bind, args, body, params, newenv);
-    *bind = find(env, (*obj)->car->name);
+    *bind = find(env, (*obj)->car);
     if (!*bind || (*bind)->cdr->type != TMACRO)
         return *obj;
     *args = (*obj)->cdr;
@@ -714,7 +713,7 @@ static Obj *eval(Obj **root, Obj **env, Obj **obj) {
         return *obj;
     case TSYMBOL: {
         // Variable
-        Obj *bind = find(env, (*obj)->name);
+        Obj *bind = find(env, *obj);
         if (!bind)
             error("Undefined symbol: %s", (*obj)->name);
         return bind->cdr;
@@ -758,7 +757,7 @@ static Obj *prim_setq(Obj **root, Obj **env, Obj **list) {
     if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed setq");
     DEFINE2(bind, value);
-    *bind = find(env, (*list)->car->name);
+    *bind = find(env, (*list)->car);
     if (!*bind)
         error("Unbound variable %s", (*list)->car->name);
     *value = (*list)->cdr->car;
