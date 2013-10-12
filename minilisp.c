@@ -11,6 +11,15 @@
 #include <string.h>
 #include <sys/mman.h>
 
+static __attribute((noreturn)) void error(char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+    exit(1);
+}
+
 //======================================================================
 // Lisp objects
 //======================================================================
@@ -24,8 +33,8 @@ enum {
     TPRIMITIVE,
     TFUNCTION,
     TMACRO,
-    TSPECIAL,
     TENV,
+    TSPECIAL,
     // The marker that indicates the object has been moved to other location by GC. The new location
     // can be found at the forwarding pointer. Only the functions to do garbage collection set and
     // handle the object of this type. Other functions will never see the object of this type.
@@ -40,7 +49,7 @@ enum {
     TTRUE,
 };
 
-// Typedef for the primitive function.
+// Typedef for the primitive function
 struct Obj;
 typedef struct Obj *Primitive(void *root, struct Obj **env, struct Obj **args);
 
@@ -96,23 +105,25 @@ static Obj *True;
 // avoid using it as a variable name as this is not an array but a list.
 static Obj *Symbols;
 
-// The size of the heap in byte
-#define MEMORY_SIZE 4096
-
-static void *memory;
-static size_t mem_nused = 0;
-static bool gc_running = false;
-
-// Flags to debug GC
-static bool debug_gc = false;
-static bool always_gc = false;
-
-static void error(char *fmt, ...) __attribute((noreturn));
-static void gc(void *root);
-
 //======================================================================
 // Memory management
 //======================================================================
+
+// The size of the heap in byte
+#define MEMORY_SIZE 4096
+
+// The pointer pointing to the beginning of the current heap
+static void *memory;
+
+// The number of bytes allocated from the heap
+static size_t mem_nused = 0;
+
+// Flags to debug GC
+static bool gc_running = false;
+static bool debug_gc = false;
+static bool always_gc = false;
+
+static void gc(void *root);
 
 // Currently we are using Cheney's copying GC algorithm, with which the available memory is split
 // into two halves and all objects are moved from one half to another every time GC is invoked. That
@@ -216,65 +227,6 @@ static Obj *alloc(void *root, int type, size_t size) {
     obj->size = size;
     mem_nused += size;
     return obj;
-}
-
-//======================================================================
-// Constructors
-//======================================================================
-
-static Obj *make_int(void *root, int value) {
-    Obj *r = alloc(root, TINT, sizeof(int));
-    r->value = value;
-    return r;
-}
-
-static Obj *make_symbol(void *root, char *name) {
-    Obj *sym = alloc(root, TSYMBOL, strlen(name) + 1);
-    strcpy(sym->name, name);
-    return sym;
-}
-
-static Obj *make_primitive(void *root, Primitive *fn) {
-    Obj *r = alloc(root, TPRIMITIVE, sizeof(Primitive *));
-    r->fn = fn;
-    return r;
-}
-
-static Obj *make_function(void *root, Obj **env, int type, Obj **params, Obj **body) {
-    assert(type == TFUNCTION || type == TMACRO);
-    Obj *r = alloc(root, type, sizeof(Obj *) * 3);
-    r->params = *params;
-    r->body = *body;
-    r->env = *env;
-    return r;
-}
-
-static Obj *make_special(int subtype) {
-    Obj *r = malloc(sizeof(void *) * 2);
-    r->type = TSPECIAL;
-    r->subtype = subtype;
-    return r;
-}
-
-struct Obj *make_env(void *root, Obj **vars, Obj **up) {
-    Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
-    r->vars = *vars;
-    r->up = *up;
-    return r;
-}
-
-static Obj *cons(void *root, Obj **car, Obj **cdr) {
-    Obj *cell = alloc(root, TCELL, sizeof(Obj *) * 2);
-    cell->car = *car;
-    cell->cdr = *cdr;
-    return cell;
-}
-
-// Returns ((x . y) . a)
-static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
-    DEFINE1(cell);
-    *cell = cons(root, x, y);
-    return cons(root, cell, a);
 }
 
 //======================================================================
@@ -394,21 +346,73 @@ static void gc(void *root) {
 }
 
 //======================================================================
+// Constructors
+//======================================================================
+
+static Obj *make_int(void *root, int value) {
+    Obj *r = alloc(root, TINT, sizeof(int));
+    r->value = value;
+    return r;
+}
+
+static Obj *cons(void *root, Obj **car, Obj **cdr) {
+    Obj *cell = alloc(root, TCELL, sizeof(Obj *) * 2);
+    cell->car = *car;
+    cell->cdr = *cdr;
+    return cell;
+}
+
+static Obj *make_symbol(void *root, char *name) {
+    Obj *sym = alloc(root, TSYMBOL, strlen(name) + 1);
+    strcpy(sym->name, name);
+    return sym;
+}
+
+static Obj *make_primitive(void *root, Primitive *fn) {
+    Obj *r = alloc(root, TPRIMITIVE, sizeof(Primitive *));
+    r->fn = fn;
+    return r;
+}
+
+static Obj *make_function(void *root, Obj **env, int type, Obj **params, Obj **body) {
+    assert(type == TFUNCTION || type == TMACRO);
+    Obj *r = alloc(root, type, sizeof(Obj *) * 3);
+    r->params = *params;
+    r->body = *body;
+    r->env = *env;
+    return r;
+}
+
+struct Obj *make_env(void *root, Obj **vars, Obj **up) {
+    Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
+    r->vars = *vars;
+    r->up = *up;
+    return r;
+}
+
+static Obj *make_special(int subtype) {
+    // Note that we use malloc() to allocate objects of type TSPECIAL because
+    // they are not managed by GC. They are created only at startup.
+    Obj *r = malloc(sizeof(void *) * 2);
+    r->type = TSPECIAL;
+    r->subtype = subtype;
+    return r;
+}
+
+// Returns ((x . y) . a)
+static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
+    DEFINE1(cell);
+    *cell = cons(root, x, y);
+    return cons(root, cell, a);
+}
+
+//======================================================================
 // Parser
 //
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
 static Obj *read_expr(void *root);
-
-static void error(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    va_end(ap);
-    exit(1);
-}
 
 static int peek(void) {
     int c = getchar();
@@ -736,7 +740,7 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
 }
 
 //======================================================================
-// Functions and special forms
+// Primitive functions and special forms
 //======================================================================
 
 // 'expr
