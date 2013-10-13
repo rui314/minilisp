@@ -502,7 +502,7 @@ static Obj *read_symbol(void *root, char c) {
     char buf[SYMBOL_MAX_LEN + 1];
     int len = 1;
     buf[0] = c;
-    while (isalnum(peek()) || peek() == '-') {
+    while (isalnum(peek()) || strchr("+=<>!@#$%^&*-?", peek())) {
         if (SYMBOL_MAX_LEN <= len)
             error("Symbol name too long");
         buf[len++] = getchar();
@@ -534,7 +534,7 @@ static Obj *read_expr(void *root) {
             return make_int(root, read_number(c - '0'));
         if (c == '-')
             return make_int(root, -read_number(0));
-        if (isalpha(c) || strchr("+=!@#$%^&*", c))
+        if (isalpha(c) || strchr("+=<>!@#$%^&*", c))
             return read_symbol(root, c);
         error("Don't know how to handle %c", c);
     }
