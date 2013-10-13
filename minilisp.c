@@ -520,12 +520,6 @@ static Obj *read_expr(void *root) {
 // Prints the given object.
 static void print(Obj *obj) {
     switch (obj->type) {
-    case TMOVED:
-        printf("<moved>");
-        return;
-    case TINT:
-        printf("%d", obj->value);
-        return;
     case TCELL:
         printf("(");
         for (;;) {
@@ -542,24 +536,20 @@ static void print(Obj *obj) {
         }
         printf(")");
         return;
-    case TSYMBOL:
-        printf("%s", obj->name);
-        return;
-    case TPRIMITIVE:
-        printf("<primitive>");
-        return;
-    case TFUNCTION:
-        printf("<function>");
-        return;
-    case TMACRO:
-        printf("<macro>");
-        return;
-    case TTRUE:
-        printf("t");
-        return;
-    case TNIL:
-        printf("()");
-        return;
+
+#define CASE(type, ...)                         \
+    case type:                                  \
+        printf(__VA_ARGS__);                    \
+        return
+    CASE(TINT, "%d", obj->value);
+    CASE(TSYMBOL, "%s", obj->name);
+    CASE(TPRIMITIVE, "<primitive>");
+    CASE(TFUNCTION, "<function>");
+    CASE(TMACRO, "<macro>");
+    CASE(TMOVED, "<moved>");
+    CASE(TTRUE, "t");
+    CASE(TNIL, "()");
+#undef CASE
     default:
         error("Bug: print: Unknown tag type: %d", obj->type);
     }
