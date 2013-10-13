@@ -79,6 +79,11 @@ run lambda t '((lambda () t))'
 run lambda 9 '((lambda (x) (+ x x x)) 3)'
 run defun 12 '(defun double (x) (+ x x)) (double 6)'
 
+run args '(3 5 7)' '(defun f (x y z) (list x y z)) (f 3 5 7)'
+
+run restargs '(3 (5 7))' '(defun f (x . y) (list x y)) (f 3 5 7)'
+run restargs '(3 ())'    '(defun f (x . y) (list x y)) (f 3)'
+
 # Lexical closures
 run closure 3 '(defun call (f) ((lambda (var) (f)) 5))
   ((lambda (var) (call (lambda () var))) 3)'

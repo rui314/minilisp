@@ -617,15 +617,17 @@ static void add_variable(void *root, Obj **env, Obj **sym, Obj **val) {
 
 // Returns a newly created environment frame.
 static Obj *push_env(void *root, Obj **env, Obj **vars, Obj **values) {
-    if (list_length(*vars) != list_length(*values))
-        error("Cannot apply function: number of argument does not match");
     DEFINE5(p, q, sym, val, map);
     *map = Nil;
-    for (p = vars, q = values; *p != Nil; *p = (*p)->cdr, *q = (*q)->cdr) {
+    for (p = vars, q = values; (*p)->type == TCELL; *p = (*p)->cdr, *q = (*q)->cdr) {
+        if ((*q)->type != TCELL)
+            error("Cannot apply function: number of argument does not match");
         *sym = (*p)->car;
         *val = (*q)->car;
         *map = acons(root, sym, val, map);
     }
+    if (*p != Nil)
+        *map = acons(root, p, q, map);
     return make_env(root, map, env);
 }
 
@@ -778,16 +780,16 @@ static Obj *prim_plus(void *root, Obj **env, Obj **list) {
 static Obj *handle_function(void *root, Obj **env, Obj **list, int type) {
     if ((*list)->type != TCELL || !is_list((*list)->car) || (*list)->cdr->type != TCELL)
         error("Malformed lambda");
-    for (Obj *p = (*list)->car; p != Nil; p = p->cdr) {
+    Obj *p = (*list)->car;
+    for (; p->type == TCELL; p = p->cdr)
         if (p->car->type != TSYMBOL)
             error("Parameter must be a symbol");
-        if (!is_list(p->cdr))
-            error("Parameter list is not a flat list");
-    }
-    DEFINE2(car, cdr);
-    *car = (*list)->car;
-    *cdr = (*list)->cdr;
-    return make_function(root, env, type, car, cdr);
+    if (p != Nil && p->type != TSYMBOL)
+        error("Parameter must be a symbol");
+    DEFINE2(params, body);
+    *params = (*list)->car;
+    *body = (*list)->cdr;
+    return make_function(root, env, type, params, body);
 }
 
 // (lambda (<symbol> ...) expr ...)
