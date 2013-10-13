@@ -725,16 +725,18 @@ static Obj *prim_cons(void *root, Obj **env, Obj **list) {
 
 // (car <cell>)
 static Obj *prim_car(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 1)
+    Obj *args = eval_list(root, env, list);
+    if (args->car->type != TCELL || args->cdr != Nil)
         error("Malformed car");
-    return eval_list(root, env, list)->car->car;
+    return args->car->car;
 }
 
 // (cdr <cell>)
 static Obj *prim_cdr(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 1)
+    Obj *args = eval_list(root, env, list);
+    if (args->car->type != TCELL || args->cdr != Nil)
         error("Malformed cdr");
-    return eval_list(root, env, list)->car->cdr;
+    return args->car->cdr;
 }
 
 // (setq <symbol> expr)
