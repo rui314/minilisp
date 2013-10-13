@@ -175,14 +175,6 @@ static void gc(void *root);
     Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3);  \
     Obj **var4 = (Obj **)(root_ADD_ROOT_ + 4)
 
-#define DEFINE5(var1, var2, var3, var4, var5)   \
-    ADD_ROOT(5);                                \
-    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
-    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2);  \
-    Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3);  \
-    Obj **var4 = (Obj **)(root_ADD_ROOT_ + 4);  \
-    Obj **var5 = (Obj **)(root_ADD_ROOT_ + 5)
-
 // Round up the given value to a multiple of size. Size must be a power of 2. It adds size - 1
 // first, then zero-ing the least significant bits to make the result a multiple of size. I know
 // these bit operations may look a little bit tricky, but it's efficient and thus frequently used.
@@ -607,18 +599,18 @@ static void add_variable(void *root, Obj **env, Obj **sym, Obj **val) {
 }
 
 // Returns a newly created environment frame.
-static Obj *push_env(void *root, Obj **env, Obj **vars, Obj **values) {
-    DEFINE5(p, q, sym, val, map);
+static Obj *push_env(void *root, Obj **env, Obj **vars, Obj **vals) {
+    DEFINE3(map, sym, val);
     *map = Nil;
-    for (p = vars, q = values; (*p)->type == TCELL; *p = (*p)->cdr, *q = (*q)->cdr) {
-        if ((*q)->type != TCELL)
+    for (; (*vars)->type == TCELL; *vars = (*vars)->cdr, *vals = (*vals)->cdr) {
+        if ((*vals)->type != TCELL)
             error("Cannot apply function: number of argument does not match");
-        *sym = (*p)->car;
-        *val = (*q)->car;
+        *sym = (*vars)->car;
+        *val = (*vals)->car;
         *map = acons(root, sym, val, map);
     }
-    if (*p != Nil)
-        *map = acons(root, p, q, map);
+    if (*vars != Nil)
+        *map = acons(root, vars, vals, map);
     return make_env(root, map, env);
 }
 
