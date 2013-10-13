@@ -523,9 +523,9 @@ static Obj *read_expr(void *root) {
             return read_quote(root);
         if (isdigit(c))
             return make_int(root, read_number(c - '0'));
-        if (c == '-')
+        if (c == '-' && isdigit(peek()))
             return make_int(root, -read_number(0));
-        if (isalpha(c) || strchr("+=<>!@#$%^&*", c))
+        if (isalpha(c) || strchr("+-=<>!@#$%^&*", c))
             return read_symbol(root, c);
         error("Don't know how to handle %c", c);
     }
