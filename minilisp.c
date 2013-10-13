@@ -296,7 +296,7 @@ static void gc(void *root) {
     void *from_space = memory;
     memory = alloc_semispace();
     if (debug_gc)
-        printf("\nMemory: %p + %x\n", memory, MEMORY_SIZE);
+        fprintf(stderr, "\nMemory: %p + %x\n", memory, MEMORY_SIZE);
 
     // Initialize the two pointers for GC. Initially they point to the beginning of the to-space.
     scan1 = scan2 = memory;
