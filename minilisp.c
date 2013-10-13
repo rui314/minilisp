@@ -313,8 +313,7 @@ static void gc(void *root) {
             break;
         case TENV:
             scan1->vars = forward(scan1->vars);
-            if (scan1->up)
-                scan1->up = forward(scan1->up);
+            scan1->up = forward(scan1->up);
             break;
         default:
             error("Bug: copy: unknown type %d", scan1->type);
@@ -656,7 +655,7 @@ static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
 
 // Searches for a variable by symbol. Returns null if not found.
 static Obj *find(Obj **env, Obj *sym) {
-    for (Obj *p = *env; p; p = p->up) {
+    for (Obj *p = *env; p != Nil; p = p->up) {
         for (Obj *cell = p->vars; cell != Nil; cell = cell->cdr) {
             Obj *bind = cell->car;
             if (sym == bind->car)
@@ -938,7 +937,7 @@ int main(int argc, char **argv) {
     Symbols = Nil;
     void *root = NULL;
     DEFINE2(env, expr);
-    *env = make_env(root, &Nil, &(Obj *){ NULL });
+    *env = make_env(root, &Nil, &Nil);
     define_constants(root, env);
     define_primitives(root, env);
 
