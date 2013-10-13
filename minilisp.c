@@ -389,6 +389,8 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
+#define SYMBOL_MAX_LEN 200
+
 static Obj *read_expr(void *root);
 
 static int peek(void) {
@@ -472,8 +474,6 @@ static int read_number(int val) {
         val = val * 10 + (getchar() - '0');
     return val;
 }
-
-#define SYMBOL_MAX_LEN 200
 
 static Obj *read_symbol(void *root, char c) {
     char buf[SYMBOL_MAX_LEN + 1];
