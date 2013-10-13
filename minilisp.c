@@ -34,19 +34,16 @@ enum {
     TFUNCTION,
     TMACRO,
     TENV,
-    TSPECIAL,
     // The marker that indicates the object has been moved to other location by GC. The new location
     // can be found at the forwarding pointer. Only the functions to do garbage collection set and
     // handle the object of this type. Other functions will never see the object of this type.
     TMOVED,
-};
-
-// Subtypes for TSPECIAL
-enum {
-    TNIL = 1,
+    // Const objects. They are statically allocated and will never be managed by GC.
+    TCONST,
+    TTRUE,
+    TNIL,
     TDOT,
     TCPAREN,
-    TTRUE,
 };
 
 // Typedef for the primitive function
@@ -82,8 +79,6 @@ typedef struct Obj {
             struct Obj *body;
             struct Obj *env;
         };
-        // Subtype for special type
-        int subtype;
         // Environment frame. This is a linked list of association lists
         // containing the mapping from symbols to their value.
         struct {
@@ -96,10 +91,10 @@ typedef struct Obj {
 } Obj;
 
 // Constants
-static Obj *Nil = &(Obj){ TSPECIAL, .subtype = TNIL };
-static Obj *Dot = &(Obj){ TSPECIAL, .subtype = TDOT };
-static Obj *Cparen = &(Obj){ TSPECIAL, .subtype = TCPAREN };
-static Obj *True = &(Obj){ TSPECIAL, .subtype = TTRUE };
+static Obj *True = &(Obj){ TTRUE };
+static Obj *Nil = &(Obj){ TNIL };
+static Obj *Dot = &(Obj){ TDOT };
+static Obj *Cparen = &(Obj){ TCPAREN };
 
 // The list containing all symbols. Such data structure is traditionally called the "obarray", but I
 // avoid using it as a variable name as this is not an array but a list.
@@ -236,8 +231,8 @@ static Obj *scan2;
 // Moves one object from the from-space to the to-space. Returns the object's new address. If the
 // object has already been moved, does nothing but just returns the new address.
 static Obj *forward(Obj *obj) {
-    // The object of type TSPECIAL is not managed by GC and will never be copied.
-    if (obj->type == TSPECIAL)
+    // Const objects are not managed by GC and will never be copied.
+    if (obj->type > TCONST)
         return obj;
 
     // If the object's address is in the to-space, the object has already been moved.
@@ -560,13 +555,11 @@ static void print(Obj *obj) {
     case TMACRO:
         printf("<macro>");
         return;
-    case TSPECIAL:
-        if (obj == Nil)
-            printf("()");
-        else if (obj == True)
-            printf("t");
-        else
-            error("Bug: print: Unknown subtype: %d", obj->subtype);
+    case TTRUE:
+        printf("t");
+        return;
+    case TNIL:
+        printf("()");
         return;
     default:
         error("Bug: print: Unknown tag type: %d", obj->type);
@@ -692,7 +685,8 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
     case TINT:
     case TPRIMITIVE:
     case TFUNCTION:
-    case TSPECIAL:
+    case TTRUE:
+    case TNIL:
         // Self-evaluating objects
         return *obj;
     case TSYMBOL: {
