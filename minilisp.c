@@ -786,6 +786,18 @@ static Obj *prim_minus(void *root, Obj **env, Obj **list) {
     return make_int(root, r);
 }
 
+// (< <integer> <integer>)
+static Obj *prim_lt(void *root, Obj **env, Obj **list) {
+    Obj *args = eval_list(root, env, list);
+    if (length(args) != 2)
+        error("malformed <");
+    Obj *x = args->car;
+    Obj *y = args->cdr->car;
+    if (x->type != TINT || y->type != TINT)
+        error("< takes only numbers");
+    return x->value < y->value ? True : Nil;
+}
+
 static Obj *handle_function(void *root, Obj **env, Obj **list, int type) {
     if ((*list)->type != TCELL || !is_list((*list)->car) || (*list)->cdr->type != TCELL)
         error("Malformed lambda");
@@ -919,6 +931,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "setcar", prim_setcar);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "-", prim_minus);
+    add_primitive(root, env, "<", prim_lt);
     add_primitive(root, env, "define", prim_define);
     add_primitive(root, env, "defun", prim_defun);
     add_primitive(root, env, "defmacro", prim_defmacro);
