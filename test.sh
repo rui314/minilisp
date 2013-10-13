@@ -48,6 +48,8 @@ run cons "(a b c)" "(cons 'a (cons 'b (cons 'c ())))"
 run car a "(car '(a b c))"
 run cdr "(b c)" "(cdr '(a b c))"
 
+run setcar "(x . b)" "(define obj (cons 'a 'b)) (setcar obj 'x) obj"
+
 # Comments
 run comment 5 "
   ; 2

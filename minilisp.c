@@ -751,6 +751,16 @@ static Obj *prim_setq(void *root, Obj **env, Obj **list) {
     return *value;
 }
 
+// (setcar <cell> expr)
+static Obj *prim_setcar(void *root, Obj **env, Obj **list) {
+    DEFINE1(args);
+    *args = eval_list(root, env, list);
+    if (length(*args) != 2 || (*args)->car->type != TCELL)
+        error("Malformed setcar");
+    (*args)->car->car = (*args)->cdr->car;
+    return (*args)->car;
+}
+
 // (+ <integer> ...)
 static Obj *prim_plus(void *root, Obj **env, Obj **list) {
     int sum = 0;
@@ -892,6 +902,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "car", prim_car);
     add_primitive(root, env, "cdr", prim_cdr);
     add_primitive(root, env, "setq", prim_setq);
+    add_primitive(root, env, "setcar", prim_setcar);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "define", prim_define);
     add_primitive(root, env, "defun", prim_defun);
