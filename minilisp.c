@@ -648,6 +648,15 @@ static bool is_list(Obj *obj) {
   return obj == Nil || obj->type == TCELL;
 }
 
+static Obj *apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
+    DEFINE3(params, newenv, body);
+    *params = (*fn)->params;
+    *newenv = (*fn)->env;
+    *newenv = push_env(root, newenv, params, args);
+    *body = (*fn)->body;
+    return progn(root, newenv, body);
+}
+
 // Apply fn with args.
 static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
     if (!is_list(*args))
@@ -655,13 +664,9 @@ static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
     if ((*fn)->type == TPRIMITIVE)
         return (*fn)->fn(root, env, args);
     if ((*fn)->type == TFUNCTION) {
-        DEFINE4(body, params, eargs, newenv);
-        *body = (*fn)->body;
-        *params = (*fn)->params;
+        DEFINE1(eargs);
         *eargs = eval_list(root, env, args);
-        *newenv = (*fn)->env;
-        *newenv = push_env(root, newenv, params, eargs);
-        return progn(root, newenv, body);
+        return apply_func(root, env, fn, eargs);
     }
     error("not supported");
 }
@@ -682,15 +687,13 @@ static Obj *find(Obj **env, Obj *sym) {
 static Obj *macroexpand(void *root, Obj **env, Obj **obj) {
     if ((*obj)->type != TCELL || (*obj)->car->type != TSYMBOL)
         return *obj;
-    DEFINE5(bind, args, body, params, newenv);
+    DEFINE3(bind, macro, args);
     *bind = find(env, (*obj)->car);
     if (!*bind || (*bind)->cdr->type != TMACRO)
         return *obj;
+    *macro = (*bind)->cdr;
     *args = (*obj)->cdr;
-    *body = (*bind)->cdr->body;
-    *params = (*bind)->cdr->params;
-    *newenv = push_env(root, env, params, args);
-    return progn(root, newenv, body);
+    return apply_func(root, env, macro, args);
 }
 
 // Evaluates the S expression.
