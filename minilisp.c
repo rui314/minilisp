@@ -96,10 +96,10 @@ typedef struct Obj {
 } Obj;
 
 // Constants
-static Obj *Nil;
-static Obj *Dot;
-static Obj *Cparen;
-static Obj *True;
+static Obj *Nil = &(Obj){ TSPECIAL, .subtype = TNIL };
+static Obj *Dot = &(Obj){ TSPECIAL, .subtype = TDOT };
+static Obj *Cparen = &(Obj){ TSPECIAL, .subtype = TCPAREN };
+static Obj *True = &(Obj){ TSPECIAL, .subtype = TTRUE };
 
 // The list containing all symbols. Such data structure is traditionally called the "obarray", but I
 // avoid using it as a variable name as this is not an array but a list.
@@ -387,15 +387,6 @@ struct Obj *make_env(void *root, Obj **vars, Obj **up) {
     Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
     r->vars = *vars;
     r->up = *up;
-    return r;
-}
-
-static Obj *make_special(int subtype) {
-    // Note that we use malloc() to allocate objects of type TSPECIAL because
-    // they are not managed by GC. They are created only at startup.
-    Obj *r = malloc(sizeof(void *) * 2);
-    r->type = TSPECIAL;
-    r->subtype = subtype;
     return r;
 }
 
@@ -957,16 +948,10 @@ int main(int argc, char **argv) {
     memory = alloc_semispace();
 
     // Constants and primitives
-    Nil = make_special(TNIL);
-    Dot = make_special(TDOT);
-    Cparen = make_special(TCPAREN);
-    True = make_special(TTRUE);
     Symbols = Nil;
-
     void *root = NULL;
     DEFINE2(env, expr);
-    *env = make_env(root, &Nil, env);
-
+    *env = make_env(root, &Nil, &(Obj *){ NULL });
     define_constants(root, env);
     define_primitives(root, env);
 
