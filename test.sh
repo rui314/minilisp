@@ -35,8 +35,11 @@ run symbol a "'a"
 run quote a "(quote a)"
 run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
-run '+' 3 '(+ 1 2)'
-run '+' -2 '(+ 1 -3)'
+run + 3 '(+ 1 2)'
+run + -2 '(+ 1 -3)'
+run 'unary -' -3 '(- 3)'
+run '-' -2 '(- 3 5)'
+run '-' -9 '(- 3 5 7)'
 
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
