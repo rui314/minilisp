@@ -801,7 +801,7 @@ static Obj *prim_defun(void *root, Obj **env, Obj **list) {
 // (define <symbol> expr)
 static Obj *prim_define(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2 || (*list)->car->type != TSYMBOL)
-        error("Malformed setq");
+        error("Malformed define");
     DEFINE2(sym, value);
     *sym = (*list)->car;
     *value = (*list)->cdr->car;
