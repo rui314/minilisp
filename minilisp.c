@@ -431,7 +431,7 @@ static void skip_line(void) {
 
 // Reads a list. Note that '(' has already been read.
 static Obj *read_list(void *root) {
-    DEFINE4(obj, head, ret, tmp);
+    DEFINE3(obj, head, last);
     *head = Nil;
     for (;;) {
         *obj = read_expr(root);
@@ -440,12 +440,12 @@ static Obj *read_list(void *root) {
         if (*obj == Cparen)
             return reverse(*head);
         if (*obj == Dot) {
-            *ret = reverse(*head);
-            *tmp = read_expr(root);
-            (*head)->cdr = *tmp;
+            *last = read_expr(root);
             if (read_expr(root) != Cparen)
                 error("Closed parenthesis expected after dot");
-            return *ret;
+            Obj *ret = reverse(*head);
+            (*head)->cdr = *last;
+            return ret;
         }
         *head = cons(root, obj, head);
     }
