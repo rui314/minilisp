@@ -39,7 +39,6 @@ enum {
     // handle the object of this type. Other functions will never see the object of this type.
     TMOVED,
     // Const objects. They are statically allocated and will never be managed by GC.
-    TCONST,
     TTRUE,
     TNIL,
     TDOT,
@@ -109,6 +108,9 @@ static Obj *Symbols;
 
 // The pointer pointing to the beginning of the current heap
 static void *memory;
+
+// The pointer pointing to the beginning of the old heap
+static void *from_space;
 
 // The number of bytes allocated from the heap
 static size_t mem_nused = 0;
@@ -231,13 +233,10 @@ static Obj *scan2;
 // Moves one object from the from-space to the to-space. Returns the object's new address. If the
 // object has already been moved, does nothing but just returns the new address.
 static Obj *forward(Obj *obj) {
-    // Const objects are not managed by GC and will never be copied.
-    if (obj->type > TCONST)
-        return obj;
-
-    // If the object's address is in the to-space, the object has already been moved.
-    ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)memory;
-    if (0 <= offset && offset < MEMORY_SIZE)
+    // If the object's address is not in the from-space, the object is not managed by GC nor it
+    // has already been moved to the to-space.
+    ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)from_space;
+    if (offset < 0 || MEMORY_SIZE <= offset)
         return obj;
 
     // The pointer is pointing to the from-space, but the object there was a tombstone. Follow the
@@ -280,7 +279,7 @@ static void gc(void *root) {
         fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
 
     // Allocate a new semi-space.
-    void *from_space = memory;
+    from_space = memory;
     memory = alloc_semispace();
     if (debug_gc)
         fprintf(stderr, "\nMemory: %p + %x\n", memory, MEMORY_SIZE);
@@ -477,8 +476,8 @@ static int read_number(int val) {
 
 static Obj *read_symbol(void *root, char c) {
     char buf[SYMBOL_MAX_LEN + 1];
-    int len = 1;
     buf[0] = c;
+    int len = 1;
     while (isalnum(peek()) || strchr("+=<>!@#$%^&*-_?", peek())) {
         if (SYMBOL_MAX_LEN <= len)
             error("Symbol name too long");
@@ -560,9 +559,7 @@ static int length(Obj *list) {
     int len = 0;
     for (; list->type == TCELL; list = list->cdr)
         len++;
-    if (list != Nil)
-        return -1;
-    return len;
+    return list == Nil ? len : -1;
 }
 
 //======================================================================
