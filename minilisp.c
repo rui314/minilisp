@@ -573,16 +573,14 @@ static void print(Obj *obj) {
     }
 }
 
+// Returns the length of the given list. -1 if it's not a proper list.
 static int length(Obj *list) {
     int len = 0;
-    for (;;) {
-        if (list == Nil)
-            return len;
-        if (list->type != TCELL)
-            error("length: cannot handle dotted list");
-        list = list->cdr;
+    for (; list->type == TCELL; list = list->cdr)
         len++;
-    }
+    if (list != Nil)
+        return -1;
+    return len;
 }
 
 //======================================================================
