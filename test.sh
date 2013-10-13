@@ -37,11 +37,16 @@ run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
 run '+' 3 '(+ 1 2)'
 run '+' -2 '(+ 1 -3)'
-run cons "(a . b)" "(cons 'a 'b)"
-run cons "(a b c)" "(cons 'a (cons 'b (cons 'c ())))"
 
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
+
+# List manipulation
+run cons "(a . b)" "(cons 'a 'b)"
+run cons "(a b c)" "(cons 'a (cons 'b (cons 'c ())))"
+
+run car a "(car '(a b c))"
+run cdr "(b c)" "(cdr '(a b c))"
 
 # Comments
 run comment 5 "

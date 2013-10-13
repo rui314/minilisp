@@ -756,6 +756,20 @@ static Obj *prim_cons(void *root, Obj **env, Obj **list) {
     return cell;
 }
 
+// (car <cell>)
+static Obj *prim_car(void *root, Obj **env, Obj **list) {
+    if (list_length(*list) != 1)
+        error("Malformed car");
+    return eval_list(root, env, list)->car->car;
+}
+
+// (cdr <cell>)
+static Obj *prim_cdr(void *root, Obj **env, Obj **list) {
+    if (list_length(*list) != 1)
+        error("Malformed cdr");
+    return eval_list(root, env, list)->car->cdr;
+}
+
 // (setq <symbol> expr)
 static Obj *prim_setq(void *root, Obj **env, Obj **list) {
     if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
@@ -908,6 +922,8 @@ static void define_constants(void *root, Obj **env) {
 static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "quote", prim_quote);
     add_primitive(root, env, "cons", prim_cons);
+    add_primitive(root, env, "car", prim_car);
+    add_primitive(root, env, "cdr", prim_cdr);
     add_primitive(root, env, "setq", prim_setq);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "define", prim_define);
