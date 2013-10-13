@@ -37,7 +37,8 @@ run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
 run '+' 3 '(+ 1 2)'
 run '+' -2 '(+ 1 -3)'
-run list "(a b c)" "(list 'a 'b 'c)"
+run cons "(a . b)" "(cons 'a 'b)"
+run cons "(a b c)" "(cons 'a (cons 'b (cons 'c ())))"
 
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
@@ -79,10 +80,10 @@ run lambda t '((lambda () t))'
 run lambda 9 '((lambda (x) (+ x x x)) 3)'
 run defun 12 '(defun double (x) (+ x x)) (double 6)'
 
-run args '(3 5 7)' '(defun f (x y z) (list x y z)) (f 3 5 7)'
+run args 15 '(defun f (x y z) (+ x y z)) (f 3 5 7)'
 
-run restargs '(3 (5 7))' '(defun f (x . y) (list x y)) (f 3 5 7)'
-run restargs '(3 ())'    '(defun f (x . y) (list x y)) (f 3)'
+run restargs '(3 5 7)' '(defun f (x . y) (cons x y)) (f 3 5 7)'
+run restargs '(3)'    '(defun f (x . y) (cons x y)) (f 3)'
 
 # Lexical closures
 run closure 3 '(defun call (f) ((lambda (var) (f)) 5))
@@ -99,12 +100,14 @@ run counter 3 '
 
 # Macros
 run macro 42 "
+  (defun list (x . y) (cons x y))
   (defmacro if-zero (x then) (list 'if (list '= x 0) then))
   (if-zero 0 42)"
 
 run macro 7 '(defmacro seven () 7) ((lambda () (seven)))'
 
 run macroexpand '(if (= x 0) (print x))' "
+  (defun list (x . y) (cons x y))
   (defmacro if-zero (x then) (list 'if (list '= x 0) then))
   (macroexpand (if-zero x (print x)))"
 

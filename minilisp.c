@@ -747,9 +747,13 @@ static Obj *prim_quote(void *root, Obj **env, Obj **list) {
     return (*list)->car;
 }
 
-// (list expr ...)
-static Obj *prim_list(void *root, Obj **env, Obj **list) {
-    return eval_list(root, env, list);
+// (cons expr expr)
+static Obj *prim_cons(void *root, Obj **env, Obj **list) {
+    if (list_length(*list) != 2)
+        error("Malformed cons");
+    Obj *cell = eval_list(root, env, list);
+    cell->cdr = cell->cdr->car;
+    return cell;
 }
 
 // (setq <symbol> expr)
@@ -903,7 +907,7 @@ static void define_constants(void *root, Obj **env) {
 
 static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "quote", prim_quote);
-    add_primitive(root, env, "list", prim_list);
+    add_primitive(root, env, "cons", prim_cons);
     add_primitive(root, env, "setq", prim_setq);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "define", prim_define);
