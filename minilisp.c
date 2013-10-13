@@ -257,8 +257,7 @@ static Obj *forward(Obj *obj) {
 }
 
 static void *alloc_semispace() {
-    return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANON, -1, 0);
+    return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 }
 
 // Copies the root objects.
@@ -275,14 +274,10 @@ static void forward_root_objects(void *root) {
 static void gc(void *root) {
     assert(!gc_running);
     gc_running = true;
-    if (debug_gc)
-        fprintf(stderr, "Running GC (%lu words used)... ", mem_nused);
 
     // Allocate a new semi-space.
     from_space = memory;
     memory = alloc_semispace();
-    if (debug_gc)
-        fprintf(stderr, "\nMemory: %p + %x\n", memory, MEMORY_SIZE);
 
     // Initialize the two pointers for GC. Initially they point to the beginning of the to-space.
     scan1 = scan2 = memory;
@@ -321,12 +316,11 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
-    mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     munmap(from_space, MEMORY_SIZE);
-    if (debug_gc) {
-        fprintf(stderr, "done\n");
-        fprintf(stderr, "%lu bytes copied.\n", mem_nused);
-    }
+    size_t old_nused = mem_nused;
+    mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
+    if (debug_gc)
+        fprintf(stderr, "GC: %lu bytes out of %lu bytes copied.\n", mem_nused, old_nused);
     gc_running = false;
 }
 
