@@ -90,6 +90,12 @@ run eq t "(eq + +)"
 run eq '()' "(eq 'foo 'bar)"
 run eq '()' "(eq + 'bar)"
 
+# gensym
+run gensym G__0 '(gensym)'
+run gensym '()' "(eq (gensym) 'G__0)"
+run gensym '()' '(eq (gensym) (gensym))'
+run gensym t '((lambda (x) (eq x x)) (gensym))'
+
 # Functions
 run lambda '<function>' '(lambda (x) x)'
 run lambda t '((lambda () t))'
@@ -126,6 +132,7 @@ run macroexpand '(if (= x 0) (print x))' "
   (defun list (x . y) (cons x y))
   (defmacro if-zero (x then) (list 'if (list '= x 0) then))
   (macroexpand (if-zero x (print x)))"
+
 
 # Sum from 0 to 10
 run recursion 55 '(defun f (x) (if (= x 0) 0 (+ (f (+ x -1)) x))) (f 10)'

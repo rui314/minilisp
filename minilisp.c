@@ -761,6 +761,14 @@ static Obj *prim_setcar(void *root, Obj **env, Obj **list) {
     return (*args)->car;
 }
 
+// (gensym)
+static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
+  static int count = 0;
+  char buf[10];
+  snprintf(buf, sizeof(buf), "G__%d", count++);
+  return make_symbol(root, buf);
+}
+
 // (+ <integer> ...)
 static Obj *prim_plus(void *root, Obj **env, Obj **list) {
     int sum = 0;
@@ -929,6 +937,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "cdr", prim_cdr);
     add_primitive(root, env, "setq", prim_setq);
     add_primitive(root, env, "setcar", prim_setcar);
+    add_primitive(root, env, "gensym", prim_gensym);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "-", prim_minus);
     add_primitive(root, env, "<", prim_lt);
