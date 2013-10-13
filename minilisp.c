@@ -590,7 +590,7 @@ static void print(Obj *obj) {
     }
 }
 
-static int list_length(Obj *list) {
+static int length(Obj *list) {
     int len = 0;
     for (;;) {
         if (list == Nil)
@@ -742,14 +742,14 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
 
 // 'expr
 static Obj *prim_quote(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 1)
+    if (length(*list) != 1)
         error("Malformed quote");
     return (*list)->car;
 }
 
 // (cons expr expr)
 static Obj *prim_cons(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2)
+    if (length(*list) != 2)
         error("Malformed cons");
     Obj *cell = eval_list(root, env, list);
     cell->cdr = cell->cdr->car;
@@ -758,21 +758,21 @@ static Obj *prim_cons(void *root, Obj **env, Obj **list) {
 
 // (car <cell>)
 static Obj *prim_car(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 1)
+    if (length(*list) != 1)
         error("Malformed car");
     return eval_list(root, env, list)->car->car;
 }
 
 // (cdr <cell>)
 static Obj *prim_cdr(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 1)
+    if (length(*list) != 1)
         error("Malformed cdr");
     return eval_list(root, env, list)->car->cdr;
 }
 
 // (setq <symbol> expr)
 static Obj *prim_setq(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
+    if (length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed setq");
     DEFINE2(bind, value);
     *bind = find(env, (*list)->car);
@@ -833,7 +833,7 @@ static Obj *prim_defun(void *root, Obj **env, Obj **list) {
 
 // (define <symbol> expr)
 static Obj *prim_define(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2 || (*list)->car->type != TSYMBOL)
+    if (length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed setq");
     DEFINE2(sym, value);
     *sym = (*list)->car;
@@ -850,7 +850,7 @@ static Obj *prim_defmacro(void *root, Obj **env, Obj **list) {
 
 // (macroexpand expr)
 static Obj *prim_macroexpand(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 1)
+    if (length(*list) != 1)
         error("Malformed macroexpand");
     DEFINE1(body);
     *body = (*list)->car;
@@ -868,7 +868,7 @@ static Obj *prim_println(void *root, Obj **env, Obj **list) {
 
 // (if expr expr expr ...)
 static Obj *prim_if(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) < 2)
+    if (length(*list) < 2)
         error("Malformed if");
     DEFINE3(cond, then, els);
     *cond = (*list)->car;
@@ -883,7 +883,7 @@ static Obj *prim_if(void *root, Obj **env, Obj **list) {
 
 // (= <integer> <integer>)
 static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2)
+    if (length(*list) != 2)
         error("Malformed =");
     Obj *values = eval_list(root, env, list);
     Obj *x = values->car;
@@ -895,7 +895,7 @@ static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
 
 // (eq expr expr)
 static Obj *prim_eq(void *root, Obj **env, Obj **list) {
-    if (list_length(*list) != 2)
+    if (length(*list) != 2)
         error("Malformed eq");
     Obj *values = eval_list(root, env, list);
     return values->car == values->cdr->car ? True : Nil;
