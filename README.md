@@ -2,9 +2,10 @@ MiniLisp
 ========
 
 This is an implementation of Lisp in less than 1k lines of C. This language can
-do only basic things, but should be interesting to those who want to see how
-lexical scoping, macro system, and copying GC can be implemented in C. The code
-is heavily commented to help the reader understand how it works.
+do only basic things, yet is powerful enough to run some non-trivial programs. The
+implementation should be interesting to those who want to see how lexical
+scoping, macro system, and copying GC can be implemented in C. The code is
+heavily commented to help the reader understand how it works.
 
 Compile
 -------
@@ -19,7 +20,7 @@ Test
 Language features
 -----------------
 
-MiniLisp is a traditional Lisp interpreter. It reads a Lisp expression at a time
+MiniLisp is a traditional Lisp interpreter. It reads one expression at a time
 from the standard input, evaluate it, and then prints out the return value of
 the expression. Here is an example of a valid input.
 
@@ -29,15 +30,18 @@ The above expression prints "3".
 
 ### Literals
 
-MiniLisp supports integer literals, `()`, `t`, and list literals.
+MiniLisp supports integer literals, `()`, `t`, symbols, and list literals.
 
 * Integer literals are positive or negative integers.
 * `()` is the only false value. It also represents the empty list.
 * `t` is a predefined variable evaluated to itself. It's a preferred way to
   represent a true value, while any non-`()` value is considered to be true.
-* List literals are the cons cells quoted by `quote`. It's either a regular list
-  whose last element's cdr is `()` or an dotted list ending with any non-`()`
-  value. A dotted list is written as `(a . b)`.
+* Symbols are objects with unique name. They are used to represent identifiers.
+  Because MiniLisp does not have string type, symbols are sometimes used as a
+  substitute for strings too.
+* List literals are cons cells. It's either a regular list whose last element's
+  cdr is `()` or an dotted list ending with any non-`()` value. A dotted list is
+  written as `(a . b)`.
 
 ### List operators
 
