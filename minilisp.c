@@ -320,7 +320,7 @@ static void gc(void *root) {
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
-        fprintf(stderr, "GC: %lu bytes out of %lu bytes copied.\n", mem_nused, old_nused);
+        fprintf(stderr, "GC: %zu bytes out of %zu bytes copied.\n", mem_nused, old_nused);
     gc_running = false;
 }
 
