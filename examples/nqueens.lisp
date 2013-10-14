@@ -38,12 +38,12 @@
 
 ;; (or e1 e2 e3 ...)
 ;; => (let1 <tmp1> e1
-;;      (if e1 e1 (let1 <tmp2> e2
-;;                  (if e2 e2 (let1 <tmp3> e3
-;;                              ...
+;;      (if <tmp1> <tmp1> (let1 <tmp2> e2
+;;                          (if <tmp2> <tmp2> (let1 <tmp3> e3
+;;                                              (if <tmp3> <tmp3> ...
 ;;
-;; The reason to use the temporary variables is not to evaluate the arguments
-;; more than once.
+;; The reason to use the temporary variables is to avoid evaluating the
+;; arguments more than once.
 (defmacro or (expr . rest)
   (if (eq rest ())
       expr
