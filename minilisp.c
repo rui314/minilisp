@@ -232,7 +232,7 @@ static Obj *scan2;
 
 // Moves one object from the from-space to the to-space. Returns the object's new address. If the
 // object has already been moved, does nothing but just returns the new address.
-static Obj *forward(Obj *obj) {
+static inline Obj *forward(Obj *obj) {
     // If the object's address is not in the from-space, the object is not managed by GC nor it
     // has already been moved to the to-space.
     ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)from_space;
