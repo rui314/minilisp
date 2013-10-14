@@ -1,4 +1,4 @@
-CFLAGS=-std=gnu99 -g -Wall
+CFLAGS=-std=gnu99 -g -O2 -Wall
 
 .PHONY: clean test
 
