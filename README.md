@@ -12,6 +12,10 @@ Compile
 
     $ make
 
+MiniLisp has been tested on Linux x86/x86-64 and 64 bit Mac OS. The code is not
+very architecture dependent, so you should be able to compile and run on other
+Unix-like operating systems.
+
 Test
 ----
 
