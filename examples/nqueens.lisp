@@ -29,18 +29,20 @@
   (cons (cons 'lambda (cons (list var) body))
 	(list val)))
 
-;; (and e1 e2 e3 ...)
-;; => (if e1 (if e2 e3 ()) ())
+;; (and e1 e2 ...)
+;; => (if e1 (and e2 ...) ())
+;; (and e1)
+;; => e1
 (defmacro and (expr . rest)
   (if (eq rest ())
       expr
     (list 'if expr (cons 'and rest) ())))
 
-;; (or e1 e2 e3 ...)
-;; => (let1 <tmp1> e1
-;;      (if <tmp1> <tmp1> (let1 <tmp2> e2
-;;                          (if <tmp2> <tmp2> (let1 <tmp3> e3
-;;                                              (if <tmp3> <tmp3> ...
+;; (or e1 e2 ...)
+;; => (let1 <tmp> e1
+;;      (if <tmp> <tmp> (or e2 ...)))
+;; (or e1)
+;; => e1
 ;;
 ;; The reason to use the temporary variables is to avoid evaluating the
 ;; arguments more than once.
