@@ -23,24 +23,23 @@
 (defun list (x . y)
   (cons x y))
 
+(defun not (x)
+  (if x () t))
+
 ;; (let1 var val body ...)
 ;; => ((lambda (var) body ...) val)
 (defmacro let1 (var val . body)
   (cons (cons 'lambda (cons (list var) body))
 	(list val)))
 
-;; Returns true if the argument is ()
-(defun null? (e)
-  (eq e ()))
-
 ;; (and e1 e2 ...)
 ;; => (if e1 (and e2 ...))
 ;; (and e1)
 ;; => e1
 (defmacro and (expr . rest)
-  (if (null? rest)
-      expr
-    (list 'if expr (cons 'and rest))))
+  (if rest
+      (list 'if expr (cons 'and rest))
+    expr))
 
 ;; (or e1 e2 ...)
 ;; => (let1 <tmp> e1
@@ -51,11 +50,16 @@
 ;; The reason to use the temporary variables is to avoid evaluating the
 ;; arguments more than once.
 (defmacro or (expr . rest)
-  (if (null? rest)
-      expr
-    (let1 var (gensym)
-	  (list 'let1 var expr
-		(list 'if var var (cons 'or rest))))))
+  (if rest
+      (let1 var (gensym)
+	    (list 'let1 var expr
+		  (list 'if var var (cons 'or rest))))
+    expr))
+
+;; (when expr body ...)
+;; => (if expr (progn body ...))
+(defmacro when (expr . body)
+  (cons 'if (cons expr (list (cons 'progn body)))))
 
 ;; (unless expr body ...)
 ;; => (if expr () body ...)
@@ -78,13 +82,13 @@
 ;; the evaluation and returns pred's return value. If all of them return (),
 ;; returns ().
 (defun any (lis pred)
-  (unless (null? lis)
+  (when lis
     (or (pred (car lis))
 	(any (cdr lis) pred))))
 
 ;;; Applies each element of lis to fn, and returns their return values as a list.
 (defun map (lis fn)
-  (unless (null? lis)
+  (when lis
     (cons (fn (car lis))
 	  (map (cdr lis) fn))))
 
@@ -116,7 +120,7 @@
 
 ;; Applies fn to each element of lis.
 (defun for-each (lis fn)
-  (or (null? lis)
+  (or (not lis)
       (progn (fn (car lis))
 	     (for-each (cdr lis) fn))))
 
@@ -148,7 +152,7 @@
 
 ;; Print out the given board.
 (defun print (board)
-  (if (null? board)
+  (if (not board)
       '$
     (println (car board))
     (print (cdr board))))
