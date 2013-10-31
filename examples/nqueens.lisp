@@ -29,14 +29,18 @@
   (cons (cons 'lambda (cons (list var) body))
 	(list val)))
 
+;; Returns true if the argument is ()
+(defun null? (e)
+  (eq e ()))
+
 ;; (and e1 e2 ...)
-;; => (if e1 (and e2 ...) ())
+;; => (if e1 (and e2 ...))
 ;; (and e1)
 ;; => e1
 (defmacro and (expr . rest)
-  (if (eq rest ())
+  (if (null? rest)
       expr
-    (list 'if expr (cons 'and rest) ())))
+    (list 'if expr (cons 'and rest))))
 
 ;; (or e1 e2 ...)
 ;; => (let1 <tmp> e1
@@ -47,7 +51,7 @@
 ;; The reason to use the temporary variables is to avoid evaluating the
 ;; arguments more than once.
 (defmacro or (expr . rest)
-  (if (eq rest ())
+  (if (null? rest)
       expr
     (let1 var (gensym)
 	  (list 'let1 var expr
@@ -63,8 +67,8 @@
 ;;;
 
 (defun <= (e1 e2)
-  (or (= e1 e2)
-      (< e1 e2)))
+  (or (< e1 e2)
+      (= e1 e2)))
 
 ;;;
 ;;; List operators
@@ -74,15 +78,13 @@
 ;; the evaluation and returns pred's return value. If all of them return (),
 ;; returns ().
 (defun any (lis pred)
-  (if (eq lis ())
-      ()
-    (let1 v (pred (car lis))
-	  (if v v (any (cdr lis) pred)))))
+  (unless (null? lis)
+    (or (pred (car lis))
+	(any (cdr lis) pred))))
 
 ;;; Applies each element of lis to fn, and returns their return values as a list.
 (defun map (lis fn)
-  (if (eq lis ())
-      ()
+  (unless (null? lis)
     (cons (fn (car lis))
 	  (map (cdr lis) fn))))
 
@@ -100,8 +102,7 @@
 
 ;; Returns a list consists of m .. n-1 integers.
 (defun %iota (m n)
-  (if (<= n m)
-      ()
+  (unless (<= n m)
     (cons m (%iota (+ m 1) n))))
 
 ;; Returns a list consists of 0 ... n-1 integers.
@@ -110,13 +111,12 @@
 
 ;; Returns a new list whose length is len and all members are init.
 (defun make-list (len init)
-  (if (= len 0)
-      ()
+  (unless (= len 0)
     (cons init (make-list (- len 1) init))))
 
 ;; Applies fn to each element of lis.
 (defun for-each (lis fn)
-  (or (eq lis ())
+  (or (null? lis)
       (progn (fn (car lis))
 	     (for-each (cdr lis) fn))))
 
@@ -148,7 +148,7 @@
 
 ;; Print out the given board.
 (defun print (board)
-  (if (eq board ())
+  (if (null? board)
       '$
     (println (car board))
     (print (cdr board))))
