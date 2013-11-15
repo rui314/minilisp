@@ -160,22 +160,19 @@
 ;; Returns true if we cannot place a queen at position (x, y), assuming that
 ;; queens have already been placed on each row from 0 to x-1.
 (defun conflict? (board x y)
-  (or
-   ;; Check if there's no conflicting queen upward
-   (any (iota x)
-	(lambda (n)
-	  (set? board n y)))
-   (any (iota x)
-	(lambda (n)
-	  (or
-	   ;; Upper left
-	   (let1 z (+ y (- n x))
-		 (and (<= 0 z)
-		      (set? board n z)))
-	   ;; Upper right
-	   (let1 z (+ y (- x n))
-		 (and (< z board-size)
-		      (set? board n z))))))))
+  (any (iota x)
+       (lambda (n)
+	 (or
+	  ;; Check if there's no conflicting queen upward
+	  (set? board n y)
+	  ;; Upper left
+	  (let1 z (+ y (- n x))
+		(and (<= 0 z)
+		     (set? board n z)))
+	  ;; Upper right
+	  (let1 z (+ y (- x n))
+		(and (< z board-size)
+		     (set? board n z)))))))
 
 ;; Find positions where we can place queens at row x, and continue searching for
 ;; the next row.
@@ -201,6 +198,5 @@
 ;;;
 
 (define board-size 8)
-(define board
-  (make-board board-size))
+(define board (make-board board-size))
 (solve board)
