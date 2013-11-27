@@ -25,7 +25,7 @@ Language features
 -----------------
 
 MiniLisp is a traditional Lisp interpreter. It reads one expression at a time
-from the standard input, evaluate it, and then prints out the return value of
+from the standard input, evaluates it, and then prints out the return value of
 the expression. Here is an example of a valid input.
 
     (+ 1 2)
