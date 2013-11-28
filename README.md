@@ -19,6 +19,9 @@ Unix-like operating systems.
 Test
 ----
 
+MiniLisp comes with a comprehensive test suite. In order to run the tests, give
+"test" argument to make.
+
     $ make test
 
 Language features
@@ -105,6 +108,19 @@ the second.
 `(if cond then else)` is the only conditional in the language. It first
 evaluates *cond*. If the result is a true value, *then* is evaluated. Otherwise
 *else* is evaluated.
+
+### Equivalence test operators
+
+`eq` takes two arguments and returns `t` if the objects are the same. What `eq`
+really does is a pointer comparison, so two objects happened to have the same
+contents but actually different are considered to not be the same by `eq`.
+
+### Output operators
+
+`println` prints a given object to the standard output.
+
+    (println 3)               ; prints "3"
+    (println '(hello world))  ; prints "(hello world)"
 
 ### Definitions
 
