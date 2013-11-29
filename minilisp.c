@@ -755,6 +755,19 @@ static Obj *prim_setcar(void *root, Obj **env, Obj **list) {
     return (*args)->car;
 }
 
+// (while cond expr ...)
+static Obj *prim_while(void *root, Obj **env, Obj **list) {
+    if (length(*list) < 2)
+        error("Malformed while");
+    DEFINE2(cond, exprs);
+    *cond = (*list)->car;
+    while (eval(root, env, cond) != Nil) {
+        *exprs = (*list)->cdr;
+        eval_list(root, env, exprs);
+    }
+    return Nil;
+}
+
 // (gensym)
 static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
   static int count = 0;
@@ -906,11 +919,6 @@ static Obj *prim_eq(void *root, Obj **env, Obj **list) {
     return values->car == values->cdr->car ? True : Nil;
 }
 
-// (exit)
-static Obj *prim_exit(void *root, Obj **env, Obj **list) {
-    exit(0);
-}
-
 static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
     DEFINE2(sym, prim);
     *sym = intern(root, name);
@@ -931,6 +939,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "cdr", prim_cdr);
     add_primitive(root, env, "setq", prim_setq);
     add_primitive(root, env, "setcar", prim_setcar);
+    add_primitive(root, env, "while", prim_while);
     add_primitive(root, env, "gensym", prim_gensym);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "-", prim_minus);
@@ -944,7 +953,6 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "=", prim_num_eq);
     add_primitive(root, env, "eq", prim_eq);
     add_primitive(root, env, "println", prim_println);
-    add_primitive(root, env, "exit", prim_exit);
 }
 
 //======================================================================
