@@ -120,6 +120,15 @@ run counter 3 '
   (counter)
   (counter)'
 
+# While loop
+run while 45 "
+  (define i 0)
+  (define sum 0)
+  (while (< i 10)
+    (setq sum (+ sum i))
+    (setq i (+ i 1)))
+  sum"
+
 # Macros
 run macro 42 "
   (defun list (x . y) (cons x y))
