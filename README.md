@@ -109,6 +109,16 @@ the second.
 evaluates *cond*. If the result is a true value, *then* is evaluated. Otherwise
 *else* is evaluated.
 
+### Loops
+
+`(while cond expr ...)` executes `expr ...` until `cond` is evaluated to
+`()`. This is the only loop supported by MiniLisp.
+
+If you are familiar with Scheme, you might be wondering if you could write a
+loop by tail recursion in MiniLisp. The answer is no. Tail calls consume stack
+space in MiniLisp, so a loop written as recursion will fail with the memory
+exhaustion error.
+
 ### Equivalence test operators
 
 `eq` takes two arguments and returns `t` if the objects are the same. What `eq`
