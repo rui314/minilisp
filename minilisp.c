@@ -801,6 +801,34 @@ static Obj *prim_minus(void *root, Obj **env, Obj **list) {
     return make_int(root, r);
 }
 
+// (* <integer> ...)
+static Obj *prim_mul(void *root, Obj **env, Obj **list) {
+    Obj *args = eval_list(root, env, list);
+    for (Obj *p = args; p != Nil; p = p->cdr)
+        if (p->car->type != TINT)
+            error("* takes only numbers");
+    if (args->cdr == Nil)
+        return make_int(root, args->car->value);
+    int r = args->car->value;
+    for (Obj *p = args->cdr; p != Nil; p = p->cdr)
+        r *= p->car->value;
+    return make_int(root, r);
+}
+
+// (/ <integer> ...)
+static Obj *prim_div(void *root, Obj **env, Obj **list) {
+    Obj *args = eval_list(root, env, list);
+    for (Obj *p = args; p != Nil; p = p->cdr)
+        if (p->car->type != TINT)
+            error("/ takes only numbers");
+    if (args->cdr == Nil)
+        return make_int(root, args->car->value);
+    int r = args->car->value;
+    for (Obj *p = args->cdr; p != Nil; p = p->cdr)
+        r /= p->car->value;
+    return make_int(root, r);
+}
+
 // (< <integer> <integer>)
 static Obj *prim_lt(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
@@ -943,6 +971,8 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "gensym", prim_gensym);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "-", prim_minus);
+    add_primitive(root, env, "*", prim_mul);
+    add_primitive(root, env, "/", prim_div);
     add_primitive(root, env, "<", prim_lt);
     add_primitive(root, env, "define", prim_define);
     add_primitive(root, env, "defun", prim_defun);
