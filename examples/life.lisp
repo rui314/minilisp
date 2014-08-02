@@ -1,5 +1,6 @@
 ;;;
-;;; Conway's game of life.
+;;; Conway's game of life
+;;;
 
 ;; (progn expr ...)
 ;; => ((lambda () expr ...))
@@ -92,7 +93,7 @@
   (%iota 0 n))
 
 ;;;
-;;; N-queens solver
+;;; Main
 ;;;
 
 (define width 10)
@@ -145,10 +146,6 @@
                               (lambda (x)
                                 (if (next board x y) '@ '_)))))
          (setq board newboard))))
-
-;;;
-;;; Main
-;;;
 
 (run '((_ _ _ _ _ _ _ _ _ _)
        (_ _ _ _ _ _ _ _ _ _)
