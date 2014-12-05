@@ -1,11 +1,24 @@
 MiniLisp
 ========
 
-This is an implementation of Lisp in less than 1k lines of C. This language can
-do only basic things, yet is powerful enough to run some non-trivial programs. The
-implementation should be interesting to those who want to see how lexical
-scoping, macro system, and copying GC can be implemented in C. The code is
-heavily commented to help the reader understand how it works.
+One day I wanted to see what I can do with 1k lines of C and
+decided to write a Lisp interpreter. That turned to be a
+fun weekend project, and the outcome is a mini lisp implementation
+that supports
+
+- integers, symbols, cons cells,
+- global variables,
+- lexically-scoped local variables,
+- closures,
+- _if_ conditional,
+- primitive functions, such as +, =, <, or _list_,
+- user-defined functions,
+- a macro system,
+- and a copying garbage collector.
+
+All those in 1000 lines of C. I didn't sacrifice readability for size.
+The code is in my opinion heavily commented to help the reader understand
+how all these features work.
 
 Compile
 -------
