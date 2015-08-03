@@ -10,11 +10,16 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+#define ATTR_NORETURN
+#define MYINLINE
+#define snprintf _snprintf
 #else
+#define ATTR_NORETURN __attribute((noreturn))
+#define MYINLINE inline
 #include <sys/mman.h>
 #endif
 
-static __attribute((noreturn)) void error(char *fmt, ...) {
+static ATTR_NORETURN void error(char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -178,7 +183,7 @@ static void gc(void *root);
 // Round up the given value to a multiple of size. Size must be a power of 2. It adds size - 1
 // first, then zero-ing the least significant bits to make the result a multiple of size. I know
 // these bit operations may look a little bit tricky, but it's efficient and thus frequently used.
-static inline size_t roundup(size_t var, size_t size) {
+static MYINLINE size_t roundup(size_t var, size_t size) {
     return (var + size - 1) & ~(size - 1);
 }
 
@@ -214,7 +219,7 @@ static Obj *alloc(void *root, int type, size_t size) {
         error("Memory exhausted");
 
     // Allocate the object.
-    Obj *obj = memory + mem_nused;
+    Obj *obj = (Obj *)memory + mem_nused;
     obj->type = type;
     obj->size = size;
     mem_nused += size;
@@ -235,7 +240,7 @@ static Obj *scan2;
 
 // Moves one object from the from-space to the to-space. Returns the object's new address. If the
 // object has already been moved, does nothing but just returns the new address.
-static inline Obj *forward(Obj *obj) {
+static MYINLINE Obj *forward(Obj *obj) {
     // If the object's address is not in the from-space, the object is not managed by GC nor it
     // has already been moved to the to-space.
     ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)from_space;
