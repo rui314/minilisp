@@ -219,7 +219,7 @@ static Obj *alloc(void *root, int type, size_t size) {
         error("Memory exhausted");
 
     // Allocate the object.
-    Obj *obj = (Obj *)memory + mem_nused;
+    Obj *obj = (char *)memory + mem_nused;
     obj->type = type;
     obj->size = size;
     mem_nused += size;
