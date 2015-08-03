@@ -1,5 +1,11 @@
 // This software is in the public domain.
 
+#ifdef _WIN32
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+#endif
+
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -219,9 +225,9 @@ static Obj *alloc(void *root, int type, size_t size) {
         error("Memory exhausted");
 
     // Allocate the object.
-    Obj *obj = (char *)memory + mem_nused;
+    Obj *obj = (Obj *)((char *)memory + mem_nused);
     obj->type = type;
-    obj->size = size;
+    obj->size = (int)size;
     mem_nused += size;
     return obj;
 }
