@@ -132,8 +132,7 @@ static Obj *make_function(int type, Obj *params, Obj *body, Obj *env) {
 }
 
 static Obj *make_special(int subtype) {
-    Obj *r = malloc(sizeof(void *) * 2);
-    r->type = TSPECIAL;
+    Obj *r = alloc(TSPECIAL, sizeof(int));
     r->subtype = subtype;
     return r;
 }
