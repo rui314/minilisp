@@ -9,7 +9,59 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
+#include <inttypes.h>
+#ifndef _WIN32
+# include <sys/mman.h>
+#else
+
+#include <windows.h>
+#include <io.h>
+
+#define PROT_READ                1
+#define PROT_WRITE               2
+#define PROT_READWRITE           3
+#define MAP_PRIVATE           0x02
+#define MAP_ANON              0x20
+#define MAP_FAILED   ((void *) -1)
+
+static void* mmap(char *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    HANDLE h = INVALID_HANDLE_VALUE;
+    void *p = NULL;
+
+    switch (prot) {
+    case PROT_READ:
+    default:
+        h = CreateFileMapping(
+            (HANDLE) _get_osfhandle(fd), 0, PAGE_READONLY, 0, length, 0);
+        if (!h) break;
+        p = MapViewOfFile(h, FILE_MAP_READ, 0, 0, length);
+        CloseHandle(h);
+        break;
+    case PROT_WRITE:
+        h = CreateFileMapping(
+            (HANDLE) _get_osfhandle(fd), 0, PAGE_READWRITE, 0, length, 0);
+        if (!h) break;
+        p = MapViewOfFile(h, FILE_MAP_WRITE, 0, 0, length);
+        CloseHandle(h);
+        break;
+    case PROT_READWRITE:
+        h = CreateFileMapping(
+            (HANDLE) _get_osfhandle(fd), 0, PAGE_READWRITE, 0, length, 0);
+        if (!h) break;
+        p = MapViewOfFile(h, FILE_MAP_ALL_ACCESS, 0, 0, length);
+        CloseHandle(h);
+        break;
+    }
+    if (p == NULL) return (void *) MAP_FAILED;
+    return (void *)(char *)(p + offset);
+}
+
+static int munmap(void *addr, size_t length) {
+    if (!UnmapViewOfFile(addr)) return -1;
+    return 0;
+}
+
+#endif
 
 static __attribute((noreturn)) void error(char *fmt, ...) {
     va_list ap;
@@ -320,7 +372,7 @@ static void gc(void *root) {
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
-        fprintf(stderr, "GC: %zu bytes out of %zu bytes copied.\n", mem_nused, old_nused);
+        fprintf(stderr, "GC: %" PRIu64 " bytes out of %" PRIu64 " bytes copied.\n", mem_nused, old_nused);
     gc_running = false;
 }
 
