@@ -1,41 +1,29 @@
-MiniLisp
+MINILISP
 ========
 
-One day I wanted to see what I can do with 1k lines of C and
-decided to write a Lisp interpreter. That turned to be a
-fun weekend project, and the outcome is a mini lisp implementation
-that supports
+MINILISP is a TRS-80 Color Computer port of Rui Ueyama
+minilisp which can be found on [https://github.com/rui314/minilisp](GitHub).
+
+It supports most of the features of minilisp including the following:
 
 - integers, symbols, cons cells,
 - global variables,
 - lexically-scoped local variables,
 - closures,
 - _if_ conditional,
-- primitive functions, such as +, =, <, or _list_,
+- primitive functions, such as +, \*,  =, <, \>, <=, \>= and _list_,
 - user-defined functions,
 - a macro system,
-- and a copying garbage collector.
+- and a copying garbage collector with whopping 2KB buffers
 
-All those in 1000 lines of C. I didn't sacrifice readability for size.
-The code is in my opinion heavily commented to help the reader understand
-how all these features work.
 
 Compile
 -------
 
     $ make
 
-MiniLisp has been tested on Linux x86/x86-64 and 64 bit Mac OS. The code is not
-very architecture dependent, so you should be able to compile and run on other
-Unix-like operating systems.
+Will create a minilisp.dsk image that can be used with MESS.
 
-Test
-----
-
-MiniLisp comes with a comprehensive test suite. In order to run the tests, give
-"test" argument to make.
-
-    $ make test
 
 Language features
 -----------------
@@ -50,11 +38,11 @@ The above expression prints "3".
 
 ### Literals
 
-MiniLisp supports integer literals, `()`, `t`, symbols, and list literals.
+MiniLisp supports integer literals, `()`, `T`, symbols, and list literals.
 
 * Integer literals are positive or negative integers.
 * `()` is the only false value. It also represents the empty list.
-* `t` is a predefined variable evaluated to itself. It's a preferred way to
+* `T` is a predefined variable evaluated to itself. It's a preferred way to
   represent a true value, while any non-`()` value is considered to be true.
 * Symbols are objects with unique name. They are used to represent identifiers.
   Because MiniLisp does not have string type, symbols are sometimes used as a
@@ -65,26 +53,26 @@ MiniLisp supports integer literals, `()`, `t`, symbols, and list literals.
 
 ### List operators
 
-`cons` takes two arguments and returns a new cons cell, making the first
+`CONS` takes two arguments and returns a new cons cell, making the first
 argument the car, and the second the cdr.
 
-    (cons 'a 'b)   ; -> (a . b)
-    (cons 'a '(b)) ; -> (a b)
+    (CONS 'A 'B)   ; -> (A . B)
+    (CONS 'A '(B)) ; -> (A B)
 
-`car` and `cdr` are accessors for cons cells. `car` returns the car, and `cdr`
-returns the cdr.
+`CAR` and `CDR` are accessors for cons cells. `CAR` returns the CAR, and `CDR`
+returns the CDR.
 
-    (car '(a . b)) ; -> a
-    (cdr '(a . b)) ; -> b
+    (CAR '(A . B)) ; -> A
+    (CDR '(A . B)) ; -> B
 
-`setcar` mutates a cons cell. `setcar` takes two arguments, assuming the first
+`SETCAR` mutates a cons cell. `SETCAR` takes two arguments, assuming the first
 argument is a cons cell. It sets the second argument's value to the cons cell's
 car.
 
-    (define cell (cons 'a 'b))
-    cell  ; -> (a . b)
-    (setcar cell 'x)
-    cell  ; -> (x . b)
+    (DEFINE CELL (CONS 'A 'B))
+    CELL; -> (A . B)
+    (SETCAR CELL 'X)
+    CELL; -> (X . B)
 
 ### Numeric operators
 
@@ -99,32 +87,59 @@ car.
     (- 3)      ; -> -3
     (- -5)     ; -> 5
 
+`*` returns the product of the arguments.
+
+    (* 1)      ; -> 1
+    (* 1 2)    ; -> 2
+    (* 1 2 3)  ; -> 6
+
 If multiple arguments are given, `-` subtracts each argument from the first one.
 
     (- 5 2)    ; -> 3
     (- 5 2 7)  ; -> -4
 
-`=` takes two arguments and returns `t` if the two are the same integer.
+`=` takes two arguments and returns `T` if the two are the same integer.
 
-    (= 11 11)  ; -> t
+    (= 11 11)  ; -> T
     (= 11 6)   ; -> ()
 
-`<` takes two arguments and returns `t` if the first argument is smaller than
+`<` takes two arguments and returns `T` if the first argument is smaller than
 the second.
 
-    (< 2 3)    ; -> t
+    (< 2 3)    ; -> T
     (< 3 3)    ; -> ()
     (< 4 3)    ; -> ()
 
+`>` takes two arguments and returns `T` if the first argument is greater than
+the second.
+
+    (> 2 3)    ; -> ()
+    (> 3 3)    ; -> ()
+    (> 4 3)    ; -> T 
+
+`<=` takes two arguments and returns `T` if the first argument is smaller than
+or equal to the second.
+
+    (<= 2 3)    ; -> T
+    (<= 3 3)    ; -> T
+    (<= 4 3)    ; -> ()
+
+`>=` takes two arguments and returns `T` if the first argument is greater than
+or equal to the second.
+
+    (>= 2 3)    ; -> ()
+    (>= 3 3)    ; -> T
+    (>= 4 3)    ; -> T
+
 ### Conditionals
 
-`(if cond then else)` is the only conditional in the language. It first
-evaluates *cond*. If the result is a true value, *then* is evaluated. Otherwise
-*else* is evaluated.
+`(IF COND THEN ELSE)` is the only conditional in the language. It first
+evaluates *COND*. If the result is a true value, *THEN* is evaluated. Otherwise
+*ELSE* is evaluated.
 
 ### Loops
 
-`(while cond expr ...)` executes `expr ...` until `cond` is evaluated to
+`(WHILE COND EXPR ...)` executes `EXPR ...` until `COND` is evaluated to
 `()`. This is the only loop supported by MiniLisp.
 
 If you are familiar with Scheme, you might be wondering if you could write a
@@ -134,45 +149,45 @@ exhaustion error.
 
 ### Equivalence test operators
 
-`eq` takes two arguments and returns `t` if the objects are the same. What `eq`
+`EQ` takes two arguments and returns `T` if the objects are the same. What `EQ`
 really does is a pointer comparison, so two objects happened to have the same
-contents but actually different are considered to not be the same by `eq`.
+contents but actually different are considered to not be the same by `EQ`.
 
 ### Output operators
 
-`println` prints a given object to the standard output.
+`PRINTLN` prints a given object to the standard output.
 
-    (println 3)               ; prints "3"
-    (println '(hello world))  ; prints "(hello world)"
+    (PRINTLN 3)               ; prints "3"
+    (PRINTLN '(HELLO WORLD))  ; prints "(HELLO WORLD)"
 
 ### Definitions
 
-MiniLisp supports variables and functions. They can be defined using `define`.
+MiniLisp supports variables and functions. They can be defined using `DEFINE`.
 
-    (define a (+ 1 2))
-    (+ a a)   ; -> 6
+    (DEFINE A (+ 1 2))
+    (+ A A)   ; -> 6
 
 There are two ways to define a function. One way is to use a special form
-`lambda`. `(lambda (args ...)  expr ...)` returns a function object which
+`LAMBDA`. `(LAMBDA(args ...)  expr ...)` returns a function object which
 you can assign to a variable using `define`.
 
-    (define double (lambda (x) (+ x x)))
-    (double 6)                ; -> 12
-    ((lambda (x) (+ x x)) 6)  ; do the same thing without assignment
+    (DEFINE DOUBLE (LAMBDA (X) (+ X X)))
+    (DOUBLE 6)                ; -> 12
+    ((LAMBDA (X) (+ X X)) 6)  ; do the same thing without assignment
 
-The other way is `defun`. `(defun fn (args ...) expr ...)` is short for
-`(define fn (lambda (args ...) expr ...)`.
+The other way is `DEFUN`. `(DEFUN FN (ARGS ...) EXPR ...)` is short for
+`(DEFINE FN (LAMBDA (ARGS ...) EXPR ...)`.
 
-    ;; Define "double" using defun
-    (defun double (x) (+ x x))
+    ;; Define "DOUBLE" using DEBUN
+    (DEFUN DOUBLE (X) (+ X X))
 
 You can write a function that takes variable number of arguments. If the
 parameter list is a dotted list, the remaining arguments are bound to the last
 parameter as a list.
 
-    (defun fn (expr . rest) rest)
-    (fn 1)     ; -> ()
-    (fn 1 2 3) ; -> (2 3)
+    (DEFUB FN (EXPR . REST) REST)
+    (FN 1)     ; -> ()
+    (FN 1 2 3) ; -> (2 3)
 
 Variables are lexically scoped and have indefinite extent. References to "outer"
 variables remain valid even after the function that created the variables
@@ -180,25 +195,25 @@ returns.
 
     ;; A countup function. We use lambda to introduce local variables because we
     ;; do not have "let" and the like.
-    (define counter
-      ((lambda (count)
-         (lambda ()
-           (setq count (+ count 1))
-           count))
+    (DEFINE COUNTER 
+      ((LAMBDA (COUNT)
+         (LAMBDA ()
+           (SETQ COUNT (+ COUNT 1))
+           COUNT))
        0))
 
-    (counter)  ; -> 1
-    (counter)  ; -> 2
+    (COUNTER)  ; -> 1
+    (COUNTER)  ; -> 2
 
     ;; This will not return 12345 but 3. Variable "count" in counter function
     ;; is resolved based on its lexical context rather than dynamic context.
-    ((lambda (count) (counter)) 12345)  ; -> 3
+    ((LAMBDA (COUNT) (COUNTER)) 12345)  ; -> 3
 
-`setq` sets a new value to an existing variable. It's an error if the variable
+`SETQ` sets a new value to an existing variable. It's an error if the variable
 is not defined.
 
-    (define val (+ 3 5))
-    (setq val (+ val 1))  ; increment "val"
+    (DEFINE VAL (+ 3 5))
+    (SETQ VAL (+ VAL 1))  ; increment "VAL"
 
 ### Macros
 
@@ -206,41 +221,39 @@ Macros look similar to functions, but they are different that macros take an
 expression as input and returns a new expression as output. `(defmacro
 macro-name (args ...) body ...)` defines a macro. Here is an example.
 
-    (defmacro unless (condition expr)
-      (list 'if condition () expr))
+    (DEFMACRO UNLESS (CONDITION EXPR)
+      (LIST 'IF CONDITION () EXPR))
 
-The above `defmacro` defines a new macro *unless*. *unless* is a new conditional
-which evaluates *expr* unless *condition* is a true value. You cannot do the
+The above `DEFMACRO` defines a new macro *UNLESS*. *UNLESS* is a new conditional
+which evaluates *EXPR* unless *CONDITION* is a true value. You cannot do the
 same thing with a function because all the arguments would be evaluated before
 the control is passed to the function.
 
-    (define x 0)
-    (unless (= x 0) '(x is not 0))  ; -> ()
-    (unless (= x 1) '(x is not 1))  ; -> (x is not 1)
+    (DEFINE X 0)
+    (UNLESS (= X 0) '(X IS NOT 0))  ; -> ()
+    (UNLESS (= x 1) '(X IS NOT 1))  ; -> (X IS NOT 1)
 
-`macroexpand` is a convenient special form to see the expanded form of a macro.
+`MACROEXPAND` is a convenient special form to see the expanded form of a macro.
 
-    (macroexpand (unless (= x 1) '(x is not 1)))
-    ;; -> (if (= x 1) () (quote (x is not 1)))
+    (MACROEXPAND (UNLESS (= x 1) '(X IS NOT 1)))
+    ;; -> (IF (= x 1) () (quote (X IS NOT 1)))
 
-`gensym` creates a new symbol which will never be `eq` to any other symbol other
+`GENSYM` creates a new symbol which will never be `eq` to any other symbol other
 than itself. Useful for writing a macro that introduces new identifiers.
 
-    (gensym)   ; -> a new symbol
+    (GENSYM)   ; -> a new symbol
 
 ### Comments
 
 As in the traditional Lisp syntax, `;` (semicolon) starts a single line comment.
 The comment continues to the end of line.
 
-No GC Branch
-------------
 
-There is a MiniLisp branch from which the code for garbage collection has been
-stripped. The accepted language is the same, but the code is simpler than the
-master branch's one. The reader might want to read the nogc branch first, then
-proceed to the master branch, to understand the code step by step.
+### Loading Programs
 
-The nogc branch is available at
-[nogc](https://github.com/rui314/minilisp/tree/nogc). The original is available
-at [master](https://github.com/rui314/minilisp).
+Programs can be loaded via the `LOAD` primitive.
+
+    (LOAD 'FILE)
+
+will load the program from disk named "FILE.LSP" as if it were typed in.
+

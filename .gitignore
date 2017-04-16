@@ -1,2 +1,7 @@
 *~
 minilisp
+*.dsk
+*.bin
+*.lst
+*.hex
+*.i
