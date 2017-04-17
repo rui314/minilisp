@@ -7,7 +7,7 @@ TARGET_C=$(TARGET:.dsk=.c)
 MESS_DIR=~/Applications/mame
 MESS=$(MESS_DIR)/mess64
 
-$(TARGET) : $(TARGET_BAS) $(TARGET_BIN) fact.lsp fib.lsp life.lsp nqueens.lsp
+$(TARGET) : $(TARGET_BAS) $(TARGET_BIN) fact.lsp fib.lsp life.lsp nqueens.lsp drwho.lsp
 	rm -f $@
 	decb dskini $@
 	decb copy $(TARGET_BAS) $@,"*.BAS" -t
@@ -20,6 +20,7 @@ $(TARGET) : $(TARGET_BAS) $(TARGET_BIN) fact.lsp fib.lsp life.lsp nqueens.lsp
 	decb copy fib.lsp $@,"FIB.LSP"
 	decb copy life.lsp $@,"LIFE.LSP"
 	decb copy nqueens.lsp $@,"NQUEENS.LSP"
+	decb copy drwho.lsp $@,"DRWHO.LSP"
 
 
 $(TARGET_BIN) : $(TARGET_C)
