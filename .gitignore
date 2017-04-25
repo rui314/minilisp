@@ -5,3 +5,4 @@ minilisp
 *.lst
 *.hex
 *.i
+*.asm
