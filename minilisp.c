@@ -1217,7 +1217,7 @@ static bool getEnvFlag(char *name) {
 
 int main() {
     width(32);
-    printf("COLOR COMPUTER MINILISP\n");
+    printf("COLOR COMPUTER MINILISP 0.1.1\n");
     printf("ORIGINAL BY RUI UEYAMA\n");
     printf("COCO PORT: JAMIE CHO\n\n");
     printf("PRESS <BREAK> TO EVAL COMMANDS\n\n");
