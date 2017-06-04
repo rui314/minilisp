@@ -69,7 +69,7 @@
 (DEFUN MAP (LIS FN)
   (WHEN LIS
     (CONS (FN (CAR LIS))
-	  (MAP (CDR LIS) FN))))
+      (MAP (CDR LIS) FN))))
 
 ;; RETURNS NTH ELEMENT OF LIS.
 (DEFUN NTH (LIS N)
@@ -149,6 +149,6 @@
 
 (RUN '((_ _ _ _ _)
        (_ _ _ _ _)
-       (_ @ @ @ _)
-       (_ _ _ @ _)
-       (_ _ @ _ _)))
+       (@ @ @ _ _)
+       (_ _ @ _ _)
+       (_ @ _ _ _)))

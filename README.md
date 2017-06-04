@@ -14,7 +14,7 @@ It supports most of the features of minilisp including the following:
 - primitive functions, such as +, \*,  =, <, \>, <=, \>= and _list_,
 - user-defined functions,
 - a macro system,
-- and a copying garbage collector with whopping 2KB buffers
+- and a copying garbage collector with whopping 15KB buffers
 
 
 Compile

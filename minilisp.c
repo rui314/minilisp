@@ -1,7 +1,7 @@
 // This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x1480
+#pragma org 0x3600
 
 #include <cmoc.h>
 #include <stdarg.h>
@@ -25,13 +25,62 @@ byte disk_buffer[68];
 #define const
 #define NULL 0
 #define true TRUE
-#define fprintf(x, y, ...) printf(y, __VA_ARGS__) 
+
+#define bprintf(...) { swap_in_basic(); printf(__VA_ARGS__); swap_out_basic(); }
+#define fprintf(x, y, ...) bprintf(y, __VA_ARGS__)
+
+
+// Swaps Basic back in and turns on interrupts.
+void swap_in_basic() {
+  asm {
+    tst isCoCo3
+    beq swap_in_basic_0010
+    ldd #$3c3d
+    sta $ffa4
+    stb $ffa5
+    ldd #$3e3f
+    sta $ffa6
+    stb $ffa7
+    bra swap_in_basic_0020
+swap_in_basic_0010:
+    clr $ffde
+swap_in_basic_0020:
+    andcc #$af
+  }
+}
+
+
+// Swaps Basic back out and turns on interrupts.
+void swap_out_basic() {
+  asm {
+    orcc #$50
+    tst isCoCo3
+    beq swap_out_basic_0010
+    ldd #$3031
+    sta $ffa4
+    stb $ffa5
+    ldd #$3233
+    sta $ffa6
+    stb $ffa7
+    bra swap_out_basic_0020
+swap_out_basic_0010:
+    clr $ffdf
+swap_out_basic_0020:
+  }
+}
 
 
 jmp_buf jmpbuf;
 
 #define error(...) {\
-    printf(__VA_ARGS__); \
+    bprintf(__VA_ARGS__); \
+    longjmp(&jmpbuf, 0); \
+  }
+
+#define error2(x, y) {\
+    memcpy(generic_buffer, y, sizeof(generic_buffer)-1); \
+    generic_buffer[sizeof(generic_buffer)-1] = '\0'; \
+    bprintf(x, generic_buffer); \
     longjmp(&jmpbuf, 0); \
   }
 
@@ -116,9 +165,10 @@ static Obj *Symbols;
 //======================================================================
 
 // The size of the heap in byte
-#define MEMORY_SIZE 0x1080
+#define MEMORY_SIZE 15360
 
-byte memory1[MEMORY_SIZE], memory2[MEMORY_SIZE];
+byte *memory1 = (byte *)0x8000;
+byte *memory2 = (byte *)0x8000 + MEMORY_SIZE;
 
 // The pointer pointing to the beginning of the current heap
 static void *memory;
@@ -392,6 +442,7 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 //======================================================================
 
 #define SYMBOL_MAX_LEN 200
+byte generic_buffer[SYMBOL_MAX_LEN + 1];
 const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
 
 static Obj *read_expr(void *root);
@@ -439,7 +490,11 @@ char getchar() {
 
   // If we are doing a load, read a char
   if (doing_load) {
+    swap_in_basic();
+    setHighSpeed(FALSE);
     word num_read = read(&fd, &file_data, sizeof(file_data));
+    setHighSpeed(TRUE);
+    swap_out_basic();
     // If we ran out of chars, clean up
     if (num_read == 0) {
       close(&fd);
@@ -462,7 +517,9 @@ char getchar() {
   has_data = true;
   while(true) {
     char c;
+    swap_in_basic();
     for(c = waitkey(true); c == 0; c = inkey());
+    swap_out_basic();
 
     if ((c == 8) && (end_pos > start_pos)) {
       end_pos--;
@@ -482,7 +539,7 @@ char getchar() {
       if (end_pos >= 0x400 + 512 - 32) {
         start_pos = start_pos - 32;
       }
-      printf("\n");
+      bprintf("\n");
       end_pos = *(char **)0x88;
 
       if (c == 3) {
@@ -503,7 +560,7 @@ char getchar() {
       if (end_pos >= 0x400 + 512 - 1) {
         start_pos = start_pos - 32;
       }
-      printf("%c", c);
+      bprintf("%c", c);
       end_pos = *(char **)0x88;
     }
   }
@@ -666,30 +723,46 @@ static Obj *read_expr(void *root) {
 
 // Prints the given object.
 static void print(Obj *obj) {
+    int tmp;
     switch (obj->type) {
     case TCELL:
-        printf("(");
+        bprintf("(");
         for (;;) {
             print(obj->val.cell.car);
             if (obj->val.cell.cdr == Nil)
                 break;
             if (obj->val.cell.cdr->type != TCELL) {
-                printf(" . ");
+                bprintf(" . ");
                 print(obj->val.cell.cdr);
                 break;
             }
-            printf(" ");
+            bprintf(" ");
             obj = obj->val.cell.cdr;
         }
-        printf(")");
+        bprintf(")");
         return;
 
 #define CASE(type, ...)                         \
     case type:                                  \
-        printf(__VA_ARGS__);                    \
+        bprintf(__VA_ARGS__);                   \
         return
-    CASE(TINT, "%d", obj->val.value);
-    CASE(TSYMBOL, "%s", obj->val.name);
+#define CASE2(type, x, y)                                        \
+    case type:                                                   \
+        memcpy(generic_buffer, y, sizeof(generic_buffer) - 1);   \
+        generic_buffer[sizeof(generic_buffer)-1] = '\0';         \
+        swap_in_basic();                                         \
+        printf(x, generic_buffer);                               \
+        swap_out_basic();                                        \
+        return
+#define CASE3(type, x, y)                                        \
+    case type:                                                   \
+        tmp = y;                                                 \
+        swap_in_basic();                                         \
+        printf(x, tmp);                                          \
+        swap_out_basic();                                        \
+        return
+    CASE3(TINT, "%d", obj->val.value);
+    CASE2(TSYMBOL, "%s", obj->val.name);
     CASE(TPRIMITIVE, "<PRIMITIVE>");
     CASE(TFUNCTION, "<FUNCTION>");
     CASE(TMACRO, "<MACRO>");
@@ -697,6 +770,7 @@ static void print(Obj *obj) {
     CASE(TTRUE, "T");
     CASE(TNIL, "()");
 #undef CASE
+#undef CASE2
     default:
         error("BUG: PRINT: UNKNOWN TAG TYPE: %d\n", obj->type);
     }
@@ -834,7 +908,7 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
         // Variable
         Obj *bind = find(env, *obj);
         if (!bind)
-            error("UNDEFINED SYMBOL: %s\n", (*obj)->val.name);
+            error2("UNDEFINED SYMBOL: %s\n", (*obj)->val.name);
         return bind->val.cell.cdr;
     }
     case TCELL: {
@@ -898,7 +972,7 @@ static Obj *prim_setq(void *root, Obj **env, Obj **list) {
     DEFINE2(bind, value);
     *bind = find(env, (*list)->val.cell.car);
     if (!*bind)
-        error("UNBOUND VARIABLE %s\n", (*list)->val.cell.car->val.name);
+        error2("UNBOUND VARIABLE %s\n", (*list)->val.cell.car->val.name);
     *value = (*list)->val.cell.cdr->val.cell.car;
     *value = eval(root, env, value);
     (*bind)->val.cell.cdr = *value;
@@ -1053,7 +1127,7 @@ static Obj *prim_println(void *root, Obj **env, Obj **list) {
     DEFINE1(tmp);
     *tmp = (*list)->val.cell.car;
     print(eval(root, env, tmp));
-    printf("\n");
+    bprintf("\n");
     return Nil;
 }
 
@@ -1166,9 +1240,15 @@ static Obj *prim_load(void *root, Obj **env, Obj **list) {
     char filebuf[13];
     strncpy(filebuf, args->val.cell.car->val.name, 8);
     strcat(filebuf, ".LSP");
+    swap_in_basic();
+    setHighSpeed(FALSE);
     if (open(&fd, filebuf)) {
+      setHighSpeed(TRUE);
+      swap_out_basic();
       doing_load = TRUE;
     } else {
+      setHighSpeed(TRUE);
+      swap_out_basic();
       return Nil;
     }
 
@@ -1216,11 +1296,14 @@ static bool getEnvFlag(char *name) {
 
 
 int main() {
+    initCoCoSupport();
+    setHighSpeed(TRUE);
     width(32);
-    printf("COLOR COMPUTER MINILISP 0.1.1\n");
-    printf("ORIGINAL BY RUI UEYAMA\n");
-    printf("COCO PORT: JAMIE CHO\n\n");
-    printf("PRESS <BREAK> TO EVAL COMMANDS\n\n");
+    swap_out_basic();
+    bprintf("COLOR COMPUTER MINILISP 0.2.0\n");
+    bprintf("ORIGINAL BY RUI UEYAMA\n");
+    bprintf("COCO PORT: JAMIE CHO\n\n");
+    bprintf("PRESS <BREAK> TO EVAL COMMANDS\n\n");
 
     // Memory allocation
     memory = (void *)memory1;
@@ -1249,7 +1332,9 @@ int main() {
     has_file_data = FALSE;
     if (doing_load) {
       doing_load = false;
+      swap_in_basic();
       close(&fd);
+      swap_out_basic();
     }
     for (;;) {
         *expr = read_expr(root);
@@ -1260,6 +1345,6 @@ int main() {
         if (*expr == Dot)
             error("STRAY DOT\n");
         print(eval(root, env, expr));
-        printf("\n");
+        bprintf("\n");
     }
 }

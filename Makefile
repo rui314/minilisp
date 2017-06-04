@@ -33,18 +33,21 @@ clean :
 	rm -rf $(TARGET) *.bin *.i *.lst *.asm *.hex
 
 run : $(TARGET)
-	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory ../cfgs/rgb
+	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/rgb
 
 run2 : $(TARGET)
-	$(MESS) coco2 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory ../cfgs/rgb
+	$(MESS) coco2 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/coco2
+
+run2b : $(TARGET)
+	$(MESS) coco2b -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/coco2b
 
 run_cmp : $(TARGET)
-	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory ../cfgs/cmp
+	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/cmp
 
 debug : $(TARGET)
-	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory ../cfgs/rgb -debug
+	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/rgb -debug
 
 debug_cmp : $(TARGET)
-	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory ../cfgs/cmp -debug
+	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/cmp -debug
 
 
