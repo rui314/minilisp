@@ -378,8 +378,9 @@ static void gc(void *root) {
     // Finish up GC.
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
+    byte sp;
     if (debug_gc)
-        fprintf(stderr, "GC: %x/%x\n", mem_nused, old_nused);
+        fprintf(stderr, "GC: %x/%x  SP: %x\n", mem_nused, old_nused, &sp);
     gc_running = false;
 }
 
