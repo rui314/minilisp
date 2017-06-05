@@ -2,7 +2,7 @@ MINILISP
 ========
 
 MINILISP is a TRS-80 Color Computer port of Rui Ueyama
-minilisp which can be found on [https://github.com/rui314/minilisp](GitHub).
+minilisp which can be found on [https://github.com/rui314/minilisp](https://github.com/rui314/minilisp).
 
 It supports most of the features of minilisp including the following:
 
