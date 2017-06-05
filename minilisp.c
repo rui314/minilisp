@@ -1,7 +1,7 @@
-// This software is in the public domain.
+//// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x3600
+#pragma org 0x3700
 
 #include <cmoc.h>
 #include <stdarg.h>
@@ -956,15 +956,17 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
 
 // 'expr
 static Obj *prim_quote(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 1)
-        error("Malformed quote\n");
+    if (length(*list) != 1) {
+        error("Malformed %s\n", "quote");
+    }
     return (*list)->val.cell.car;
 }
 
 // (cons expr expr)
 static Obj *prim_cons(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed cons\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", "cons");
+    }
     Obj *cell = eval_list(root, env, list);
     cell->val.cell.cdr = cell->val.cell.cdr->val.cell.car;
     return cell;
@@ -973,27 +975,30 @@ static Obj *prim_cons(void *root, Obj **env, Obj **list) {
 // (car <cell>)
 static Obj *prim_car(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
-    if (args->val.cell.car->type != TCELL || args->val.cell.cdr != Nil)
-        error("Malformed car\n");
+    if (args->val.cell.car->type != TCELL || args->val.cell.cdr != Nil) {
+        error("Malformed %s\n", "car");
+    }
     return args->val.cell.car->val.cell.car;
 }
 
 // (cdr <cell>)
 static Obj *prim_cdr(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
-    if (args->val.cell.car->type != TCELL || args->val.cell.cdr != Nil)
-        error("Malformed cdr\n");
+    if (args->val.cell.car->type != TCELL || args->val.cell.cdr != Nil) {
+        error("Malformed %s\n", "cdr");
+    }
     return args->val.cell.car->val.cell.cdr;
 }
 
 // (setq <symbol> expr)
 static Obj *prim_setq(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2 || (*list)->val.cell.car->type != TSYMBOL)
-        error("Malformed setq\n");
+    if (length(*list) != 2 || (*list)->val.cell.car->type != TSYMBOL) {
+        error("Malformed %s\n", "setq");
+    }
     DEFINE2(bind, value);
     *bind = find(env, (*list)->val.cell.car);
     if (!*bind)
-        error2("Unbound variable %s\n", (*list)->val.cell.car->val.name);
+        error("Unbound variable %s\n", (*list)->val.cell.car->val.name);
     *value = (*list)->val.cell.cdr->val.cell.car;
     *value = eval(root, env, value);
     (*bind)->val.cell.cdr = *value;
@@ -1004,16 +1009,18 @@ static Obj *prim_setq(void *root, Obj **env, Obj **list) {
 static Obj *prim_setcar(void *root, Obj **env, Obj **list) {
     DEFINE1(args);
     *args = eval_list(root, env, list);
-    if (length(*args) != 2 || (*args)->val.cell.car->type != TCELL)
-        error("Malformed setcar\n");
+    if (length(*args) != 2 || (*args)->val.cell.car->type != TCELL) {
+        error("Malformed %s\n", "setcar");
+    }
     (*args)->val.cell.car->val.cell.car = (*args)->val.cell.cdr->val.cell.car;
     return (*args)->val.cell.car;
 }
 
 // (while cond expr ...)
 static Obj *prim_while(void *root, Obj **env, Obj **list) {
-    if (length(*list) < 2)
-        error("Malformed while\n");
+    if (length(*list) < 2) {
+        error("Malformed %s\n", "while");
+    }
     DEFINE2(cond, exprs);
     *cond = (*list)->val.cell.car;
     while (eval(root, env, cond) != Nil) {
@@ -1035,8 +1042,9 @@ static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
 static Obj *prim_plus(void *root, Obj **env, Obj **list) {
     int sum = 0;
     for (Obj *args = eval_list(root, env, list); args != Nil; args = args->val.cell.cdr) {
-        if (args->val.cell.car->type != TINT)
-            error("+ takes only numbers\n");
+        if (args->val.cell.car->type != TINT) {
+            error("%s takes only numbers\n", "+");
+        }
         sum += args->val.cell.car->val.value;
     }
     return make_int(root, sum);
@@ -1047,8 +1055,9 @@ static Obj *prim_plus(void *root, Obj **env, Obj **list) {
 static Obj *prim_mult(void *root, Obj **env, Obj **list) {
     int prod = 1;
     for (Obj *args = eval_list(root, env, list); args != Nil; args = args->val.cell.cdr) {
-        if (args->val.cell.car->type != TINT)
-            error("* takes only numbers\n");
+        if (args->val.cell.car->type != TINT) {
+            error("%s takes only numbers\n", "*");
+        }
         prod *= args->val.cell.car->val.value;
     }
     return make_int(root, prod);
@@ -1059,8 +1068,9 @@ static Obj *prim_mult(void *root, Obj **env, Obj **list) {
 static Obj *prim_minus(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     for (Obj *p = args; p != Nil; p = p->val.cell.cdr)
-        if (p->val.cell.car->type != TINT)
-            error("- takes only numbers\n");
+        if (p->val.cell.car->type != TINT) {
+            error("%s takes only numbers\n", "-");
+        }
     if (args->val.cell.cdr == Nil)
         return make_int(root, -args->val.cell.car->val.value);
     int r = args->val.cell.car->val.value;
@@ -1072,24 +1082,29 @@ static Obj *prim_minus(void *root, Obj **env, Obj **list) {
 // (< <integer> <integer>)
 static Obj *prim_lt(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
-    if (length(args) != 2)
-        error("Malformed <\n");
+    if (length(args) != 2) {
+        error("Malformed %s\n", "<");
+    }
     Obj *x = args->val.cell.car;
     Obj *y = args->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT)
-        error("< takes only numbers\n");
+    if (x->type != TINT || y->type != TINT) {
+        error("%s takes only numbers\n", "<");
+    }
     return x->val.value < y->val.value ? True : Nil;
 }
 
 static Obj *handle_function(void *root, Obj **env, Obj **list, int type) {
-    if ((*list)->type != TCELL || !is_list((*list)->val.cell.car) || (*list)->val.cell.cdr->type != TCELL)
-        error("Malformed lambda\n");
+    if ((*list)->type != TCELL || !is_list((*list)->val.cell.car) || (*list)->val.cell.cdr->type != TCELL) {
+        error("Malformed %s\n", "lambda");
+    }
     Obj *p = (*list)->val.cell.car;
     for (; p->type == TCELL; p = p->val.cell.cdr)
-        if (p->val.cell.car->type != TSYMBOL)
+        if (p->val.cell.car->type != TSYMBOL) {
             error("Parameter must be a symbol\n");
-    if (p != Nil && p->type != TSYMBOL)
+        }
+    if (p != Nil && p->type != TSYMBOL) {
         error("Parameter must be a symbol\n");
+    }
     DEFINE2(params, body);
     *params = (*list)->val.cell.car;
     *body = (*list)->val.cell.cdr;
@@ -1102,8 +1117,9 @@ static Obj *prim_lambda(void *root, Obj **env, Obj **list) {
 }
 
 static Obj *handle_defun(void *root, Obj **env, Obj **list, int type) {
-    if ((*list)->val.cell.car->type != TSYMBOL || (*list)->val.cell.cdr->type != TCELL)
-        error("Malformed defun\n");
+    if ((*list)->val.cell.car->type != TSYMBOL || (*list)->val.cell.cdr->type != TCELL) {
+        error("Malformed %s\n", "defun");
+    }
     DEFINE3(fn, sym, rest);
     *sym = (*list)->val.cell.car;
     *rest = (*list)->val.cell.cdr;
@@ -1119,8 +1135,9 @@ static Obj *prim_defun(void *root, Obj **env, Obj **list) {
 
 // (define <symbol> expr)
 static Obj *prim_define(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2 || (*list)->val.cell.car->type != TSYMBOL)
-        error("Malformed define\n");
+    if (length(*list) != 2 || (*list)->val.cell.car->type != TSYMBOL) {
+        error("Malformed %s\n", "define");
+    }
     DEFINE2(sym, value);
     *sym = (*list)->val.cell.car;
     *value = (*list)->val.cell.cdr->val.cell.car;
@@ -1136,8 +1153,9 @@ static Obj *prim_defmacro(void *root, Obj **env, Obj **list) {
 
 // (macroexpand expr)
 static Obj *prim_macroexpand(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 1)
-        error("Malformed macroexpand\n");
+    if (length(*list) != 1) {
+        error("Malformed %s\n", "macroexpand");
+    }
     DEFINE1(body);
     *body = (*list)->val.cell.car;
     return macroexpand(root, env, body);
@@ -1154,8 +1172,9 @@ static Obj *prim_println(void *root, Obj **env, Obj **list) {
 
 // (if expr expr expr ...)
 static Obj *prim_if(void *root, Obj **env, Obj **list) {
-    if (length(*list) < 2)
-        error("Malformed if\n");
+    if (length(*list) < 2) {
+        error("Malformed %s\n", "if");
+    }
     DEFINE3(cond, then, els);
     *cond = (*list)->val.cell.car;
     *cond = eval(root, env, cond);
@@ -1169,68 +1188,78 @@ static Obj *prim_if(void *root, Obj **env, Obj **list) {
 
 // (= <integer> <integer>)
 static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed =\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", "=");
+    }
     Obj *values = eval_list(root, env, list);
     Obj *x = values->val.cell.car;
     Obj *y = values->val.cell.cdr->val.cell.car;
     if (x->type != TINT || y->type != TINT)
-        error("= only takes numbers\n");
+        error("%s only takes numbers\n", "=");
     return x->val.value == y->val.value ? True : Nil;
 }
 
 // (< <integer> <integer>)
 static Obj *prim_num_lt(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed <\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", "<");
+    }
     Obj *values = eval_list(root, env, list);
     Obj *x = values->val.cell.car;
     Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT)
-        error("< only takes numbers\n");
+    if (x->type != TINT || y->type != TINT) {
+        error("%s only takes numbers\n", "<");
+    }
     return x->val.value < y->val.value ? True : Nil;
 }
 
 // (> <integer> <integer>)
 static Obj *prim_num_gt(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed >\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", "<");
+    }
     Obj *values = eval_list(root, env, list);
     Obj *x = values->val.cell.car;
     Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT)
-        error("> only takes numbers\n");
+    if (x->type != TINT || y->type != TINT) {
+        error("%s only takes numbers\n", ">");
+    }
     return x->val.value > y->val.value ? True : Nil;
 }
 
 // (<= <integer> <integer>)
 static Obj *prim_num_lte(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed <=\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", "<=");
+    }
     Obj *values = eval_list(root, env, list);
     Obj *x = values->val.cell.car;
     Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT)
-        error("<= only takes numbers\n");
+    if (x->type != TINT || y->type != TINT) {
+        error("%s only takes numbers\n", "<=");
+    }
     return x->val.value <= y->val.value ? True : Nil;
 }
 
 // (>= <integer> <integer>)
 static Obj *prim_num_gte(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed >=\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", ">=");
+    }
     Obj *values = eval_list(root, env, list);
     Obj *x = values->val.cell.car;
     Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT)
-        error(">= only takes numbers\n");
+    if (x->type != TINT || y->type != TINT) {
+        error("%s only takes numbers\n", ">=");
+    }
     return x->val.value >= y->val.value ? True : Nil;
 }
 
 // (eq expr expr)
 static Obj *prim_eq(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2)
-        error("Malformed eq\n");
+    if (length(*list) != 2) {
+        error("Malformed %s\n", "eq");
+    }
     Obj *values = eval_list(root, env, list);
     return values->val.cell.car == values->val.cell.cdr->val.cell.car ? True : Nil;
 }
@@ -1255,8 +1284,9 @@ static Obj *prim_load(void *root, Obj **env, Obj **list) {
       return Nil;
 
     Obj *args = eval_list(root, env, list);
-    if (args->val.cell.car->type != TSYMBOL)
-        error("Malformed load\n");
+    if (args->val.cell.car->type != TSYMBOL) {
+        error("Malformed %s\n", "load");
+    }
 
     char filebuf[13];
     strncpy(filebuf, args->val.cell.car->val.name, 8);

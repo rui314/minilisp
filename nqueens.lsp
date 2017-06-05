@@ -197,6 +197,6 @@
 ;;; main
 ;;;
 
-(define board-size 3)
+(define board-size 4)
 (define board (make-board board-size))
 (solve board)
