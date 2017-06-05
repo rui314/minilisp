@@ -1,153 +1,153 @@
 ;;;
-;;; CONWAY'S GAME OF LIFE
+;;; conway's game of life
 ;;;
 
-;; (PROGN EXPR ...)
-;; => ((LAMBDA () EXPR ...))
-(DEFMACRO PROGN (EXPR . REST)
-  (LIST (CONS 'LAMBDA (CONS () (CONS EXPR REST)))))
+;; (progn expr ...)
+;; => ((lambda () expr ...))
+(defmacro progn (expr . rest)
+  (list (cons 'lambda (cons () (cons expr rest)))))
 
-(DEFUN LIST (X . Y)
-  (CONS X Y))
+(defun list (x . y)
+  (cons x y))
 
-(DEFUN NOT (X)
-  (IF X () T))
+(defun not (x)
+  (if x () T))
 
-;; (LET VAR VAL BODY ...)
-;; => ((LAMBDA (VAR) BODY ...) VAL)
-(DEFMACRO LET (VAR VAL . BODY)
-  (CONS (CONS 'LAMBDA (CONS (LIST VAR) BODY))
-	(LIST VAL)))
+;; (let var val body ...)
+;; => ((lambda (var) body ...) val)
+(defmacro let (var val . body)
+  (cons (cons 'lambda (cons (list var) body))
+	(list val)))
 
-;; (AND E1 E2 ...)
-;; => (IF E1 (AND E2 ...))
-;; (AND E1)
-;; => E1
-(DEFMACRO AND (EXPR . REST)
-  (IF REST
-      (LIST 'IF EXPR (CONS 'AND REST))
-    EXPR))
+;; (and e1 e2 ...)
+;; => (if e1 (and e2 ...))
+;; (and e1)
+;; => e1
+(defmacro and (expr . rest)
+  (if rest
+      (list 'if expr (cons 'and rest))
+    expr))
 
-;; (OR E1 E2 ...)
-;; => (LET <TMP> E1
-;;      (IF <TMP> <TMP> (OR E2 ...)))
-;; (OR E1)
-;; => E1
+;; (or e1 e2 ...)
+;; => (let <tmp> e1
+;;      (if <tmp> <tmp> (or e2 ...)))
+;; (or e1)
+;; => e1
 ;;
-;; THE REASON TO USE THE TEMPORARY VARIABLES IS TO AVOID EVALUATING THE
-;; ARGUMENTS MORE THAN ONCE.
-(DEFMACRO OR (EXPR . REST)
-  (IF REST
-      (LET VAR (GENSYM)
-           (LIST 'LET VAR EXPR
-                 (LIST 'IF VAR VAR (CONS 'OR REST))))
-    EXPR))
+;; the reason to use the temporary variables is to avoid evaluating the
+;; arguments more than once.
+(defmacro or (expr . rest)
+  (if rest
+      (let var (gensym)
+           (list 'let var expr
+                 (list 'if var var (cons 'or rest))))
+    expr))
 
-;; (WHEN EXPR BODY ...)
-;; => (IF EXPR (PROGN BODY ...))
-(DEFMACRO WHEN (EXPR . BODY)
-  (CONS 'IF (CONS EXPR (LIST (CONS 'PROGN BODY)))))
+;; (when expr body ...)
+;; => (if expr (progn body ...))
+(defmacro when (expr . body)
+  (cons 'if (cons expr (list (cons 'progn body)))))
 
-;; (UNLESS EXPR BODY ...)
-;; => (IF EXPR () BODY ...)
-(DEFMACRO UNLESS (EXPR . BODY)
-  (CONS 'IF (CONS EXPR (CONS () BODY))))
-
-;;;
-;;; NUMERIC OPERATORS
-;;;
-
-(DEFUN <= (E1 E2)
-  (OR (< E1 E2)
-      (= E1 E2)))
+;; (unless expr body ...)
+;; => (if expr () body ...)
+(defmacro unless (expr . body)
+  (cons 'if (cons expr (cons () body))))
 
 ;;;
-;;; LIST OPERATORS
+;;; numeric operators
 ;;;
 
-;;; APPLIES EACH ELEMENT OF LIS TO FN, AND RETURNS THEIR RETURN VALUES AS A LIST.
-(DEFUN MAP (LIS FN)
-  (WHEN LIS
-    (CONS (FN (CAR LIS))
-      (MAP (CDR LIS) FN))))
-
-;; RETURNS NTH ELEMENT OF LIS.
-(DEFUN NTH (LIS N)
-  (IF (= N 0)
-      (CAR LIS)
-    (NTH (CDR LIS) (- N 1))))
-
-;; RETURNS THE NTH TAIL OF LIS.
-(DEFUN NTH-TAIL (LIS N)
-  (IF (= N 0)
-      LIS
-    (NTH-TAIL (CDR LIS) (- N 1))))
-
-;; RETURNS A LIST CONSISTS OF M .. N-1 INTEGERS.
-(DEFUN %IOTA (M N)
-  (UNLESS (<= N M)
-    (CONS M (%IOTA (+ M 1) N))))
-
-;; RETURNS A LIST CONSISTS OF 0 ... N-1 INTEGERS.
-(DEFUN IOTA (N)
-  (%IOTA 0 N))
+(defun <= (e1 e2)
+  (or (< e1 e2)
+      (= e1 e2)))
 
 ;;;
-;;; MAIN
+;;; list operators
 ;;;
 
-(DEFINE WIDTH 5)
-(DEFINE HEIGHT 5)
+;;; applies each element of lis to fn, and returns their return values as a list.
+(defun map (lis fn)
+  (when lis
+    (cons (fn (car lis))
+      (map (cdr lis) fn))))
 
-;; RETURNS LOCATION (X, Y)'S ELEMENT.
-(DEFUN GET (BOARD X Y)
-  (NTH (NTH BOARD Y) X))
+;; returns nth element of lis.
+(defun nth (lis n)
+  (if (= n 0)
+      (car lis)
+    (nth (cdr lis) (- n 1))))
 
-;; RETURNS TRUE IF LOCATION (X, Y)'S VALUE IS "@".
-(DEFUN ALIVE? (BOARD X Y)
-  (AND (<= 0 X)
-       (< X HEIGHT)
-       (<= 0 Y)
-       (< Y WIDTH)
-       (EQ (GET BOARD X Y) '@)))
+;; returns the nth tail of lis.
+(defun nth-tail (lis n)
+  (if (= n 0)
+      lis
+    (nth-tail (cdr lis) (- n 1))))
 
-;; PRINT OUT THE GIVEN BOARD.
-(DEFUN PRINT (BOARD)
-  (IF (NOT BOARD)
+;; returns a list consists of m .. n-1 integers.
+(defun %iota (m n)
+  (unless (<= n m)
+    (cons m (%iota (+ m 1) n))))
+
+;; returns a list consists of 0 ... n-1 integers.
+(defun iota (n)
+  (%iota 0 n))
+
+;;;
+;;; main
+;;;
+
+(define width 5)
+(define height 5)
+
+;; returns location (x, y)'s element.
+(defun get (board x y)
+  (nth (nth board y) x))
+
+;; returns true if location (x, y)'s value is "@".
+(defun alive? (board x y)
+  (and (<= 0 x)
+       (< x height)
+       (<= 0 y)
+       (< y width)
+       (eq (get board x y) '@)))
+
+;; print out the given board.
+(defun print (board)
+  (if (not board)
       '$
-    (PRINTLN (CAR BOARD))
-    (PRINT (CDR BOARD))))
+    (println (car board))
+    (print (cdr board))))
 
-(DEFUN COUNT (BOARD X Y)
-  (LET AT (LAMBDA (X Y)
-            (IF (ALIVE? BOARD X Y) 1 0))
-       (+ (AT (- X 1) (- Y 1))
-          (AT (- X 1) Y)
-          (AT (- X 1) (+ Y 1))
-          (AT X (- Y 1))
-          (AT X (+ Y 1))
-          (AT (+ X 1) (- Y 1))
-          (AT (+ X 1) Y)
-          (AT (+ X 1) (+ Y 1)))))
+(defun count (board x y)
+  (let at (lambda (x y)
+            (if (alive? board x y) 1 0))
+       (+ (at (- x 1) (- y 1))
+          (at (- x 1) y)
+          (at (- x 1) (+ y 1))
+          (at x (- y 1))
+          (at x (+ y 1))
+          (at (+ x 1) (- y 1))
+          (at (+ x 1) y)
+          (at (+ x 1) (+ y 1)))))
 
-(DEFUN NEXT (BOARD X Y)
-  (LET C (COUNT BOARD X Y)
-       (IF (ALIVE? BOARD X Y)
-           (OR (= C 2) (= C 3))
-         (= C 3))))
+(defun next (board x y)
+  (let c (count board x y)
+       (if (alive? board x y)
+           (or (= c 2) (= c 3))
+         (= c 3))))
 
-(DEFUN RUN (BOARD)
-  (WHILE T
-    (PRINT BOARD)
-    (PRINTLN '*)
-    (LET NEWBOARD (MAP (IOTA HEIGHT)
-                       (LAMBDA (Y)
-                         (MAP (IOTA WIDTH)
-                              (LAMBDA (X)
-                                (IF (NEXT BOARD X Y) '@ '_)))))
-         (SETQ BOARD NEWBOARD))))
+(defun run (board)
+  (while T
+    (print board)
+    (println '*)
+    (let newboard (map (iota height)
+                       (lambda (y)
+                         (map (iota width)
+                              (lambda (x)
+                                (if (next board x y) '@ '_)))))
+         (setq board newboard))))
 
-(RUN '((_ _ _ _ _)
+(run '((_ _ _ _ _)
        (_ _ _ _ _)
        (@ @ @ _ _)
        (_ _ @ _ _)

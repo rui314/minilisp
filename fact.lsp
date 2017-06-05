@@ -1,4 +1,4 @@
-(DEFUN FACT(X)
-  (IF (<= X 0)
+(defun fact(x)
+  (if (<= x 0)
       1
-      (* X (FACT (- X 1)))))
+      (* x (fact (- x 1)))))

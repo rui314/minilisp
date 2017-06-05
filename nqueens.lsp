@@ -1,202 +1,202 @@
 ;;;
-;;; N-QUEENS PUZZLE SOLVER.
+;;; n-queens puzzle solver.
 ;;;
-;;; THE N QUEENS PUZZLE IS THE PROBLEM OF PLACING N CHESS QUEENS ON AN N X N
-;;; CHESSBOARD SO THAT NO TWO QUEENS ATTACK EACH
-;;; OTHER. HTTP://EN.WIKIPEDIA.ORG/WIKI/EIGHT_QUEENS_PUZZLE
+;;; the n queens puzzle is the problem of placing n chess queens on an n x n
+;;; chessboard so that no two queens attack each
+;;; other. http://en.wikipedia.org/wiki/eight_queens_puzzle
 ;;;
-;;; THIS PROGRAM SOLVES N-QUEENS PUZZLE BY DEPTH-FIRST BACKTRACKING.
-;;;
-
-;;;
-;;; BASIC MACROS
-;;;
-;;; BECAUSE THE LANGUAGE DOES NOT HAVE QUASIQUOTE, WE NEED TO CONSTRUCT AN
-;;; EXPANDED FORM USING CONS AND LIST.
+;;; this program solves n-queens puzzle by depth-first backtracking.
 ;;;
 
-;; (PROGN EXPR ...)
-;; => ((LAMBDA () EXPR ...))
-(DEFMACRO PROGN (EXPR . REST)
-  (LIST (CONS 'LAMBDA (CONS () (CONS EXPR REST)))))
+;;;
+;;; basic macros
+;;;
+;;; because the language does not have quasiquote, we need to construct an
+;;; expanded form using cons and list.
+;;;
 
-(DEFUN LIST (X . Y)
-  (CONS X Y))
+;; (progn expr ...)
+;; => ((lambda () expr ...))
+(defmacro progn (expr . rest)
+  (list (cons 'lambda (cons () (cons expr rest)))))
 
-(DEFUN NOT (X)
-  (IF X () T))
+(defun list (x . y)
+  (cons x y))
 
-;; (LET1 VAR VAL BODY ...)
-;; => ((LAMBDA (VAR) BODY ...) VAL)
-(DEFMACRO LET1 (VAR VAL . BODY)
-  (CONS (CONS 'LAMBDA (CONS (LIST VAR) BODY))
-	(LIST VAL)))
+(defun not (x)
+  (if x () T))
 
-;; (AND E1 E2 ...)
-;; => (IF E1 (AND E2 ...))
-;; (AND E1)
-;; => E1
-(DEFMACRO AND (EXPR . REST)
-  (IF REST
-      (LIST 'IF EXPR (CONS 'AND REST))
-    EXPR))
+;; (let1 var val body ...)
+;; => ((lambda (var) body ...) val)
+(defmacro let1 (var val . body)
+  (cons (cons 'lambda (cons (list var) body))
+	(list val)))
 
-;; (OR E1 E2 ...)
-;; => (LET1 <TMP> E1
-;;      (IF <TMP> <TMP> (OR E2 ...)))
-;; (OR E1)
-;; => E1
+;; (and e1 e2 ...)
+;; => (if e1 (and e2 ...))
+;; (and e1)
+;; => e1
+(defmacro and (expr . rest)
+  (if rest
+      (list 'if expr (cons 'and rest))
+    expr))
+
+;; (or e1 e2 ...)
+;; => (let1 <tmp> e1
+;;      (if <tmp> <tmp> (or e2 ...)))
+;; (or e1)
+;; => e1
 ;;
-;; THE REASON TO USE THE TEMPORARY VARIABLES IS TO AVOID EVALUATING THE
-;; ARGUMENTS MORE THAN ONCE.
-(DEFMACRO OR (EXPR . REST)
-  (IF REST
-      (LET1 VAR (GENSYM)
-	    (LIST 'LET1 VAR EXPR
-		  (LIST 'IF VAR VAR (CONS 'OR REST))))
-    EXPR))
+;; the reason to use the temporary variables is to avoid evaluating the
+;; arguments more than once.
+(defmacro or (expr . rest)
+  (if rest
+      (let1 var (gensym)
+	    (list 'let1 var expr
+		  (list 'if var var (cons 'or rest))))
+    expr))
 
-;; (WHEN EXPR BODY ...)
-;; => (IF EXPR (PROGN BODY ...))
-(DEFMACRO WHEN (EXPR . BODY)
-  (CONS 'IF (CONS EXPR (LIST (CONS 'PROGN BODY)))))
+;; (when expr body ...)
+;; => (if expr (progn body ...))
+(defmacro when (expr . body)
+  (cons 'if (cons expr (list (cons 'progn body)))))
 
-;; (UNLESS EXPR BODY ...)
-;; => (IF EXPR () BODY ...)
-(DEFMACRO UNLESS (EXPR . BODY)
-  (CONS 'IF (CONS EXPR (CONS () BODY))))
-
-;;;
-;;; NUMERIC OPERATORS
-;;;
-
-(DEFUN <= (E1 E2)
-  (OR (< E1 E2)
-      (= E1 E2)))
+;; (unless expr body ...)
+;; => (if expr () body ...)
+(defmacro unless (expr . body)
+  (cons 'if (cons expr (cons () body))))
 
 ;;;
-;;; LIST OPERATORS
+;;; numeric operators
 ;;;
 
-;; APPLIES EACH ELEMENT OF LIS TO PRED. IF PRED RETURNS A TRUE VALUE, TERMINATE
-;; THE EVALUATION AND RETURNS PRED'S RETURN VALUE. IF ALL OF THEM RETURN (),
-;; RETURNS ().
-(DEFUN ANY (LIS PRED)
-  (WHEN LIS
-    (OR (PRED (CAR LIS))
-	(ANY (CDR LIS) PRED))))
-
-;;; APPLIES EACH ELEMENT OF LIS TO FN, AND RETURNS THEIR RETURN VALUES AS A LIST.
-(DEFUN MAP (LIS FN)
-  (WHEN LIS
-    (CONS (FN (CAR LIS))
-	  (MAP (CDR LIS) FN))))
-
-;; RETURNS NTH ELEMENT OF LIS.
-(DEFUN NTH (LIS N)
-  (IF (= N 0)
-      (CAR LIS)
-    (NTH (CDR LIS) (- N 1))))
-
-;; RETURNS THE NTH TAIL OF LIS.
-(DEFUN NTH-TAIL (LIS N)
-  (IF (= N 0)
-      LIS
-    (NTH-TAIL (CDR LIS) (- N 1))))
-
-;; RETURNS A LIST CONSISTS OF M .. N-1 INTEGERS.
-(DEFUN %IOTA (M N)
-  (UNLESS (<= N M)
-    (CONS M (%IOTA (+ M 1) N))))
-
-;; RETURNS A LIST CONSISTS OF 0 ... N-1 INTEGERS.
-(DEFUN IOTA (N)
-  (%IOTA 0 N))
-
-;; RETURNS A NEW LIST WHOSE LENGTH IS LEN AND ALL MEMBERS ARE INIT.
-(DEFUN MAKE-LIST (LEN INIT)
-  (UNLESS (= LEN 0)
-    (CONS INIT (MAKE-LIST (- LEN 1) INIT))))
-
-;; APPLIES FN TO EACH ELEMENT OF LIS.
-(DEFUN FOR-EACH (LIS FN)
-  (OR (NOT LIS)
-      (PROGN (FN (CAR LIS))
-	     (FOR-EACH (CDR LIS) FN))))
+(defun <= (e1 e2)
+  (or (< e1 e2)
+      (= e1 e2)))
 
 ;;;
-;;; N-QUEENS SOLVER
+;;; list operators
 ;;;
 
-;; CREATES SIZE X SIZE LIST FILLED WITH SYMBOL "X".
-(DEFUN MAKE-BOARD (SIZE)
-  (MAP (IOTA SIZE)
-       (LAMBDA (_)
-	 (MAKE-LIST SIZE 'X))))
+;; applies each element of lis to pred. if pred returns a true value, terminate
+;; the evaluation and returns pred's return value. if all of them return (),
+;; returns ().
+(defun any (lis pred)
+  (when lis
+    (or (pred (car lis))
+	(any (cdr lis) pred))))
 
-;; RETURNS LOCATION (X, Y)'S ELEMENT.
-(DEFUN GET (BOARD X Y)
-  (NTH (NTH BOARD X) Y))
+;;; applies each element of lis to fn, and returns their return values as a list.
+(defun map (lis fn)
+  (when lis
+    (cons (fn (car lis))
+	  (map (cdr lis) fn))))
 
-;; SET SYMBOL "@" TO LOCATION (X, Y).
-(DEFUN SET (BOARD X Y)
-  (SETCAR (NTH-TAIL (NTH BOARD X) Y) '@))
+;; returns nth element of lis.
+(defun nth (lis n)
+  (if (= n 0)
+      (car lis)
+    (nth (cdr lis) (- n 1))))
 
-;; SET SYMBOL "X" TO LOCATION (X, Y).
-(DEFUN CLEAR (BOARD X Y)
-  (SETCAR (NTH-TAIL (NTH BOARD X) Y) 'X))
+;; returns the nth tail of lis.
+(defun nth-tail (lis n)
+  (if (= n 0)
+      lis
+    (nth-tail (cdr lis) (- n 1))))
 
-;; RETURNS TRUE IF LOCATION (X, Y)'S VALUE IS "@".
-(DEFUN SET? (BOARD X Y)
-  (EQ (GET BOARD X Y) '@))
+;; returns a list consists of m .. n-1 integers.
+(defun %iota (m n)
+  (unless (<= n m)
+    (cons m (%iota (+ m 1) n))))
 
-;; PRINT OUT THE GIVEN BOARD.
-(DEFUN PRINT (BOARD)
-  (IF (NOT BOARD)
+;; returns a list consists of 0 ... n-1 integers.
+(defun iota (n)
+  (%iota 0 n))
+
+;; returns a new list whose length is len and all members are init.
+(defun make-list (len init)
+  (unless (= len 0)
+    (cons init (make-list (- len 1) init))))
+
+;; applies fn to each element of lis.
+(defun for-each (lis fn)
+  (or (not lis)
+      (progn (fn (car lis))
+	     (for-each (cdr lis) fn))))
+
+;;;
+;;; n-queens solver
+;;;
+
+;; creates size x size list filled with symbol "x".
+(defun make-board (size)
+  (map (iota size)
+       (lambda (_)
+	 (make-list size 'x))))
+
+;; returns location (x, y)'s element.
+(defun get (board x y)
+  (nth (nth board x) y))
+
+;; set symbol "@" to location (x, y).
+(defun set (board x y)
+  (setcar (nth-tail (nth board x) y) '@))
+
+;; set symbol "x" to location (x, y).
+(defun clear (board x y)
+  (setcar (nth-tail (nth board x) y) 'x))
+
+;; returns true if location (x, y)'s value is "@".
+(defun set? (board x y)
+  (eq (get board x y) '@))
+
+;; print out the given board.
+(defun print (board)
+  (if (not board)
       '$
-    (PRINTLN (CAR BOARD))
-    (PRINT (CDR BOARD))))
+    (println (car board))
+    (print (cdr board))))
 
-;; RETURNS TRUE IF WE CANNOT PLACE A QUEEN AT POSITION (X, Y), ASSUMING THAT
-;; QUEENS HAVE ALREADY BEEN PLACED ON EACH ROW FROM 0 TO X-1.
-(DEFUN CONFLICT? (BOARD X Y)
-  (ANY (IOTA X)
-       (LAMBDA (N)
-	 (OR
-	  ;; CHECK IF THERE'S NO CONFLICTING QUEEN UPWARD
-	  (SET? BOARD N Y)
-	  ;; UPPER LEFT
-	  (LET1 Z (+ Y (- N X))
-		(AND (<= 0 Z)
-		     (SET? BOARD N Z)))
-	  ;; UPPER RIGHT
-	  (LET1 Z (+ Y (- X N))
-		(AND (< Z BOARD-SIZE)
-		     (SET? BOARD N Z)))))))
+;; returns true if we cannot place a queen at position (x, y), assuming that
+;; queens have already been placed on each row from 0 to x-1.
+(defun conflict? (board x y)
+  (any (iota x)
+       (lambda (n)
+	 (or
+	  ;; check if there's no conflicting queen upward
+	  (set? board n y)
+	  ;; upper left
+	  (let1 z (+ y (- n x))
+		(and (<= 0 z)
+		     (set? board n z)))
+	  ;; upper right
+	  (let1 z (+ y (- x n))
+		(and (< z board-size)
+		     (set? board n z)))))))
 
-;; FIND POSITIONS WHERE WE CAN PLACE QUEENS AT ROW X, AND CONTINUE SEARCHING FOR
-;; THE NEXT ROW.
-(DEFUN %SOLVE (BOARD X)
-  (IF (= X BOARD-SIZE)
-      ;; PROBLEM SOLVED
-      (PROGN (PRINT BOARD)
-	     (PRINTLN '$))
-    (FOR-EACH (IOTA BOARD-SIZE)
-	      (LAMBDA (Y)
-		(UNLESS (CONFLICT? BOARD X Y)
-		  (SET BOARD X Y)
-		  (%SOLVE BOARD (+ X 1))
-		  (CLEAR BOARD X Y))))))
+;; find positions where we can place queens at row x, and continue searching for
+;; the next row.
+(defun %solve (board x)
+  (if (= x board-size)
+      ;; problem solved
+      (progn (print board)
+	     (println '$))
+    (for-each (iota board-size)
+	      (lambda (y)
+		(unless (conflict? board x y)
+		  (set board x y)
+		  (%solve board (+ x 1))
+		  (clear board x y))))))
 
-(DEFUN SOLVE (BOARD)
-  (PRINTLN 'START)
-  (%SOLVE BOARD 0)
-  (PRINTLN 'DONE))
+(defun solve (board)
+  (println 'start)
+  (%solve board 0)
+  (println 'done))
 
 ;;;
-;;; MAIN
+;;; main
 ;;;
 
-(DEFINE BOARD-SIZE 3)
-(DEFINE BOARD (MAKE-BOARD BOARD-SIZE))
-(SOLVE BOARD)
+(define board-size 3)
+(define board (make-board board-size))
+(solve board)

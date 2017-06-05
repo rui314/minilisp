@@ -53,26 +53,26 @@ MiniLisp supports integer literals, `()`, `T`, symbols, and list literals.
 
 ### List operators
 
-`CONS` takes two arguments and returns a new cons cell, making the first
+`cons` takes two arguments and returns a new cons cell, making the first
 argument the car, and the second the cdr.
 
-    (CONS 'A 'B)   ; -> (A . B)
-    (CONS 'A '(B)) ; -> (A B)
+    (cons 'a 'b)   ; -> (a . b)
+    (cons 'a '(b)) ; -> (a b)
 
-`CAR` and `CDR` are accessors for cons cells. `CAR` returns the CAR, and `CDR`
-returns the CDR.
+`car` and `cdr` are accessors for cons cells. `car` returns the car, and `cdr`
+returns the cdr.
 
-    (CAR '(A . B)) ; -> A
-    (CDR '(A . B)) ; -> B
+    (car '(a . b)) ; -> a
+    (cdr '(a . b)) ; -> b
 
-`SETCAR` mutates a cons cell. `SETCAR` takes two arguments, assuming the first
+`setcar` mutates a cons cell. `setcar` takes two arguments, assuming the first
 argument is a cons cell. It sets the second argument's value to the cons cell's
 car.
 
-    (DEFINE CELL (CONS 'A 'B))
-    CELL; -> (A . B)
-    (SETCAR CELL 'X)
-    CELL; -> (X . B)
+    (define cell (cons 'a 'b))
+    cell; -> (a . b)
+    (setcar cell 'x)
+    cell; -> (x . b)
 
 ### Numeric operators
 
@@ -133,13 +133,13 @@ or equal to the second.
 
 ### Conditionals
 
-`(IF COND THEN ELSE)` is the only conditional in the language. It first
-evaluates *COND*. If the result is a true value, *THEN* is evaluated. Otherwise
-*ELSE* is evaluated.
+`(if cond then else)` is the only conditional in the language. It first
+evaluates *cond*. If the result is a true value, *then* is evaluated. Otherwise
+*else* is evaluated.
 
 ### Loops
 
-`(WHILE COND EXPR ...)` executes `EXPR ...` until `COND` is evaluated to
+`(while cond expr ...)` executes `expr ...` until `cond` is evaluated to
 `()`. This is the only loop supported by MiniLisp.
 
 If you are familiar with Scheme, you might be wondering if you could write a
@@ -149,45 +149,45 @@ exhaustion error.
 
 ### Equivalence test operators
 
-`EQ` takes two arguments and returns `T` if the objects are the same. What `EQ`
+`eq` takes two arguments and returns `T` if the objects are the same. What `eq`
 really does is a pointer comparison, so two objects happened to have the same
-contents but actually different are considered to not be the same by `EQ`.
+contents but actually different are considered to not be the same by `eq`.
 
 ### Output operators
 
-`PRINTLN` prints a given object to the standard output.
+`println` prints a given object to the standard output.
 
-    (PRINTLN 3)               ; prints "3"
-    (PRINTLN '(HELLO WORLD))  ; prints "(HELLO WORLD)"
+    (println 3)               ; prints "3"
+    (println '(hello world))  ; prints "(hello world)"
 
 ### Definitions
 
-MiniLisp supports variables and functions. They can be defined using `DEFINE`.
+MiniLisp supports variables and functions. They can be defined using `define`.
 
-    (DEFINE A (+ 1 2))
-    (+ A A)   ; -> 6
+    (define a (+ 1 2))
+    (+ a a)   ; -> 6
 
 There are two ways to define a function. One way is to use a special form
-`LAMBDA`. `(LAMBDA(args ...)  expr ...)` returns a function object which
+`lambda`. `(lambda(args ...)  expr ...)` returns a function object which
 you can assign to a variable using `define`.
 
-    (DEFINE DOUBLE (LAMBDA (X) (+ X X)))
-    (DOUBLE 6)                ; -> 12
-    ((LAMBDA (X) (+ X X)) 6)  ; do the same thing without assignment
+    (define double (lambda (x) (+ x x)))
+    (double 6)                ; -> 12
+    ((lambda (x) (+ x x)) 6)  ; do the same thing without assignment
 
-The other way is `DEFUN`. `(DEFUN FN (ARGS ...) EXPR ...)` is short for
-`(DEFINE FN (LAMBDA (ARGS ...) EXPR ...)`.
+The other way is `defun`. `(defun fn (ARGS ...) expr ...)` is short for
+`(define fn (lambda (ARGS ...) expr ...)`.
 
-    ;; Define "DOUBLE" using DEBUN
-    (DEFUN DOUBLE (X) (+ X X))
+    ;; Define "double" using defun
+    (defun double (x) (+ x x))
 
 You can write a function that takes variable number of arguments. If the
 parameter list is a dotted list, the remaining arguments are bound to the last
 parameter as a list.
 
-    (DEFUB FN (EXPR . REST) REST)
-    (FN 1)     ; -> ()
-    (FN 1 2 3) ; -> (2 3)
+    (defun fn (expr . rest) rest)
+    (fn 1)     ; -> ()
+    (fn 1 2 3) ; -> (2 3)
 
 Variables are lexically scoped and have indefinite extent. References to "outer"
 variables remain valid even after the function that created the variables
@@ -195,25 +195,25 @@ returns.
 
     ;; A countup function. We use lambda to introduce local variables because we
     ;; do not have "let" and the like.
-    (DEFINE COUNTER 
-      ((LAMBDA (COUNT)
-         (LAMBDA ()
-           (SETQ COUNT (+ COUNT 1))
-           COUNT))
+    (define counter 
+      ((lambda (count)
+         (lambda ()
+           (setq count (+ count 1))
+           count))
        0))
 
-    (COUNTER)  ; -> 1
-    (COUNTER)  ; -> 2
+    (counter)  ; -> 1
+    (counter)  ; -> 2
 
     ;; This will not return 12345 but 3. Variable "count" in counter function
     ;; is resolved based on its lexical context rather than dynamic context.
-    ((LAMBDA (COUNT) (COUNTER)) 12345)  ; -> 3
+    ((lambda (count) (counter)) 12345)  ; -> 3
 
-`SETQ` sets a new value to an existing variable. It's an error if the variable
+`setq` sets a new value to an existing variable. It's an error if the variable
 is not defined.
 
-    (DEFINE VAL (+ 3 5))
-    (SETQ VAL (+ VAL 1))  ; increment "VAL"
+    (define val (+ 3 5))
+    (setq val (+ val 1))  ; increment "val"
 
 ### Macros
 
@@ -221,27 +221,27 @@ Macros look similar to functions, but they are different that macros take an
 expression as input and returns a new expression as output. `(defmacro
 macro-name (args ...) body ...)` defines a macro. Here is an example.
 
-    (DEFMACRO UNLESS (CONDITION EXPR)
-      (LIST 'IF CONDITION () EXPR))
+    (defmacro unless (condition expr)
+      (list 'if condition () expr))
 
-The above `DEFMACRO` defines a new macro *UNLESS*. *UNLESS* is a new conditional
-which evaluates *EXPR* unless *CONDITION* is a true value. You cannot do the
+The above `defmacro` defines a new macro *unless*. *unless* is a new conditional
+which evaluates *expr* unless *condition* is a true value. You cannot do the
 same thing with a function because all the arguments would be evaluated before
 the control is passed to the function.
 
-    (DEFINE X 0)
-    (UNLESS (= X 0) '(X IS NOT 0))  ; -> ()
-    (UNLESS (= x 1) '(X IS NOT 1))  ; -> (X IS NOT 1)
+    (define x 0)
+    (unless (= x 0) '(x is not 0))  ; -> ()
+    (unless (= x 1) '(x is not 1))  ; -> (x is not 1)
 
-`MACROEXPAND` is a convenient special form to see the expanded form of a macro.
+`macroexpand` is a convenient special form to see the expanded form of a macro.
 
-    (MACROEXPAND (UNLESS (= x 1) '(X IS NOT 1)))
-    ;; -> (IF (= x 1) () (quote (X IS NOT 1)))
+    (macroexpand (unless (= x 1) '(x IS NOT 1)))
+    ;; -> (if (= x 1) () (quote (x IS NOT 1)))
 
-`GENSYM` creates a new symbol which will never be `eq` to any other symbol other
+`gensym` creates a new symbol which will never be `eq` to any other symbol other
 than itself. Useful for writing a macro that introduces new identifiers.
 
-    (GENSYM)   ; -> a new symbol
+    (gensym)   ; -> a new symbol
 
 ### Comments
 
@@ -251,9 +251,9 @@ The comment continues to the end of line.
 
 ### Loading Programs
 
-Programs can be loaded via the `LOAD` primitive.
+Programs can be loaded via the `load` primitive.
 
-    (LOAD 'FILE)
+    (load 'file)
 
-will load the program from disk named "FILE.LSP" as if it were typed in.
+will load the program from disk named "file.lsp" as if it were typed in.
 

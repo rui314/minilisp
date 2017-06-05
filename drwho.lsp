@@ -1,36 +1,36 @@
-(DEFUN MAKE-DR(NUM PHRASE)
-  (LAMBDA (MSG)
-    (IF (EQ MSG 'NUM)
-      NUM
-      (IF (EQ MSG 'PHRASE)
-        PHRASE
-        'UNKNOWN_MSG))))
+(defun make-dr(num phrase)
+  (lambda (msg)
+    (if (eq msg 'num)
+      num
+      (if (eq msg 'phrase)
+        phrase
+        'unknown_msg))))
 
 
-(DEFINE HARTNELL (MAKE-DR 1 'HMMN))
-(DEFINE TROUGHTON (MAKE-DR 2 'I-DONT-LIKE-IT))
-(DEFINE PERTWEE (MAKE-DR 3 'REVERSE-THE-POLARITY))
-(DEFINE TOM-BAKER (MAKE-DR 4 'JELLY-BABY))
-(DEFINE DAVISON (MAKE-DR 5 'NOT-TO-REVERSE-THE-POLARITY-OF-THE-NEUTRON-FLOW))
-(DEFINE COLIN-BAKER (MAKE-DR 6 'AN-ALIEN-SPY))
-(DEFINE MCCOY (MAKE-DR 7 'IM-READY))
-(DEFINE MCGANN (MAKE-DR 8 'IM-READY))
-(DEFINE ECCLESTON (MAKE-DR 9 'FANTASTIC))
-(DEFINE TENNANT (MAKE-DR 10 'ALLONS-Y))
-(DEFINE SMITH (MAKE-DR 11 'GERONIMO))
-(DEFINE CAPALDI (MAKE-DR 12 'SHUTTITY-UP-UP-UP))
+(define hartnell (make-dr 1 'hmmn))
+(define troughton (make-dr 2 'i-dont-like-it))
+(define pertwee (make-dr 3 'reverse-the-polarity))
+(define tom-baker (make-dr 4 'jelly-baby))
+(define davison (make-dr 5 'not-to-reverse-the-polarity-of-the-neutron-flow))
+(define colin-baker (make-dr 6 'an-alien-spy))
+(define mccoy (make-dr 7 'im-ready))
+(define mcgann (make-dr 8 'im-ready))
+(define eccleston (make-dr 9 'fantastic))
+(define tennant (make-dr 10 'allons-y))
+(define smith (make-dr 11 'geronimo))
+(define capaldi (make-dr 12 'shuttity-up-up-up))
 
-(DEFUN MAKE-DRWHO-UNIVERSE()
-  (DEFINE DOCTORS
-    (CONS HARTNELL (CONS TROUGHTON (CONS PERTWEE
-      (CONS TOM-BAKER (CONS DAVISON (CONS COLIN-BAKER
-      (CONS MCGANN (CONS ECCLESTON (CONS TENNANT
-      (CONS SMITH (CONS CAPALDI '()))))))))))))
-  (LAMBDA (MSG)
-    (IF (EQ MSG 'CURRENT)
-      (CAR DOCTORS)
-      (IF (EQ MSG 'REGENERATE)
-        ((LAMBDA  ()
-          (SETQ DOCTORS (CDR DOCTORS))
+(defun make-drwho-universe()
+  (define doctors
+    (cons hartnell (cons troughton (cons pertwee
+      (cons tom-baker (cons davison (cons colin-baker
+      (cons mcgann (cons eccleston (cons tennant
+      (cons smith (cons capaldi '()))))))))))))
+  (lambda (msg)
+    (if (eq msg 'current)
+      (car doctors)
+      (if (eq msg 'regenerate)
+        ((lambda  ()
+          (setq doctors (cdr doctors))
           '())) 
-        'UNKNOWN_MSG))))
+        'unknown_msg))))
