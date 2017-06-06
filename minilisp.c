@@ -1,7 +1,7 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x3700
+#pragma org 0x3800
 
 #include <cmoc.h>
 #include <stdarg.h>
@@ -25,6 +25,7 @@ byte disk_buffer[68];
 #define const
 #define NULL 0
 #define true TRUE
+#define screen_ptr ((char **)0x88)
 
 // Swaps Basic back in and turns on interrupts.
 void swap_in_basic() {
@@ -194,7 +195,7 @@ static Obj *Symbols;
 #define MEMORY_SIZE 15360
 
 byte *memory1 = (byte *)0x8000;
-byte *memory2 = (byte *)0x8000 + MEMORY_SIZE;
+byte *memory2 = memory1 + MEMORY_SIZE;
 
 // The pointer pointing to the beginning of the current heap
 static void *memory;
@@ -478,32 +479,11 @@ static Obj *read_expr(void *root);
 #define stderr 1
 #define EOF 0
 
-char screen2ascii(char c) {
-  if ((c >= 1) && (c <= 26)) {
-    return c + 96;
-  }
-  if ((c >= 96) && (c <= 127)) {
-    return c - 64;
-  }
-  return c;
-}
-
-
-char ascii2screen(char c) {
-  if ((c >= 97) && (c <= 122)) {
-    return c - 96;
-  }
-  if ((c >= 32) && (c <= 63)) {
-    return c + 64;
-  }
-  return c;
-}
-
 
 char buffer[512];
 byte has_data = false;
-char *start_pos = buffer;
-char *end_pos = buffer;
+char *start_pos;
+char *end_pos;
 struct FileDesc fd;
 bool has_file_data = FALSE;
 char file_data;
@@ -531,10 +511,10 @@ char getchar() {
     if (start_pos >= end_pos) {
       has_data = false;
     }
-    return screen2ascii(c);
+    return c;
   }
 
-  start_pos = end_pos = *(char **)0x88;
+  start_pos = end_pos = buffer;
   has_data = true;
   while(true) {
     char c;
@@ -542,47 +522,56 @@ char getchar() {
     for(c = waitkey(true); c == 0; c = inkey());
     swap_out_basic();
 
+    // Process backspace
     if ((c == 8) && (end_pos > start_pos)) {
       end_pos--;
-      *end_pos = ascii2screen(' ');
-      *(char **)0x88 = end_pos;
+      *end_pos = ' ';
+      *screen_ptr = *screen_ptr - 1;
       continue;
     }
 
-    // Don't go over a full screen minus last line
-    if (end_pos - start_pos > 512 - 33) {
-      continue;
-    }
-
-    // Process chars if we hit an ESC
+    // Process chars if we hit enter or ESC
     if ((c == 3) || (c == '\r')) {
-      end_pos = *(char **)0x88;
-      if (end_pos >= 0x400 + 512 - 32) {
-        start_pos = start_pos - 32;
+      // Don't go over a full screen minus last line
+      if (c == '\r') {
+        if ((end_pos - start_pos) >= (sizeof(buffer) - 32)) {
+          continue;
+        }
       }
-      bprintf("\n");
-      end_pos = *(char **)0x88;
 
+      // Increment by one line
+      char *before = *screen_ptr;
+      bprintf("\n");
+      char *after = *screen_ptr;
+      if (after <= before) {
+        after = after + 32;
+      }
+
+      // Fill in buffer with spaces
+      memset(end_pos, ' ', after - before);
+      end_pos += after - before;
+
+      // If break was pressed, begin processing data
       if (c == 3) {
-        memcpy(buffer, start_pos, end_pos - start_pos);
-        end_pos = buffer + (end_pos - start_pos);
-        start_pos = buffer;
         c = *start_pos++;
-        if (start_pos >= end_pos) {
+        if (start_pos > end_pos) {
           has_data = false;
         }
-        return screen2ascii(c);
+        return c;
       }
       continue;
     }
 
     // Process a normal char
+    if ((end_pos) - start_pos >= (sizeof(buffer) - 1)) {
+      continue;
+    }
     if (c >= 32) {
-      if (end_pos >= 0x400 + 512 - 1) {
+      if (end_pos >= start_pos + sizeof(buffer)) {
         start_pos = start_pos - 32;
       }
       bprintf("%c", c);
-      end_pos = *(char **)0x88;
+      *end_pos++ = c;
     }
   }
 }
@@ -600,7 +589,7 @@ void ungetc(char c, byte ignore) {
   }
   has_data = true;
   --start_pos;
-  *start_pos = ascii2screen(c);
+  *start_pos = c;
   return;
 }
 
@@ -1351,7 +1340,7 @@ int main() {
     setHighSpeed(TRUE);
     width(32);
     swap_out_basic();
-    bprintf("Color Computer MiniLisp 0.3.0\n");
+    bprintf("Color Computer MiniLisp 0.3.1\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
