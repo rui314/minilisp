@@ -1340,7 +1340,7 @@ int main() {
     setHighSpeed(TRUE);
     width(32);
     swap_out_basic();
-    bprintf("Color Computer MiniLisp 0.3.1\n");
+    bprintf("Color Computer MiniLisp 0.3.2\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
