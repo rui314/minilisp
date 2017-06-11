@@ -7,14 +7,6 @@
 #include <stdarg.h>
 #include <coco.h>
 
-byte disk_buffer[68];
-#define sbrk(x) (disk_buffer)
-#include <disk.h>
-#undef sbrk
-
-#include "setjmp.h"
-#include "setjmp.c"
-
 #define bool byte
 #define inline
 #define __attribute(x)
@@ -25,47 +17,91 @@ byte disk_buffer[68];
 #define const
 #define NULL 0
 #define true TRUE
-#define screen_ptr ((char **)0x88)
+
+byte disk_buffer[68];
+bool doing_load = FALSE;
+#define sbrk(x) (disk_buffer)
+#include <disk.h>
+#undef sbrk
+
+#include "setjmp.h"
+#include "setjmp.c"
+
+
+// Macros to help us with print operations
+#define bprintf(...) { swap_in_basic_for_print(); printf(__VA_ARGS__); swap_out_basic_after_print(); }
+#define fprintf(x, y, ...) bprintf(y, __VA_ARGS__)
+
+
+// We map in an area of memory from 0x8000 to 0xA000 to store our input buffer
+#define MAP_IN_INPUT_BUFFER asm { \
+  lda #$34 \
+  sta $ffa4 \
+}
+#define MAP_OUT_INPUT_BUFFER asm { \
+  lda #$30 \
+  sta $ffa4 \
+}
+
+
+// These variables must be kept together in this order. When we perform print
+// operations, we need to store the old stack pointer and move the stack to
+// this area. This is because BASIC maps the 40 and 80 column screen memory to
+// 0x2000 and 0x4000 which will overlap with our stack.
+byte stack[32];
+void *stack_ptr;
+
+
+// Swaps Basic back in, turns on interrupts, moves stack
+// so that print opertions will work.
+asm void swap_in_basic_for_print() {
+  asm {
+    orcc #$50
+    puls d
+    sts stack_ptr
+    leas stack_ptr
+    pshs d
+    bra swap_in_basic
+  }
+}
+
+// Swaps Basic back out, turns on interrupts and restores
+// the stack after a print operation
+asm void swap_out_basic_after_print() {
+  asm {
+    orcc #$50
+    puls d
+    lds stack_ptr
+    pshs d
+    bra swap_out_basic
+  }
+}
 
 // Swaps Basic back in and turns on interrupts.
-void swap_in_basic() {
+asm void swap_in_basic() {
   asm {
-    tst isCoCo3
-    beq swap_in_basic_0010
     ldd #$3c3d
     sta $ffa4
     stb $ffa5
     ldd #$3e3f
     sta $ffa6
     stb $ffa7
-    bra swap_in_basic_0020
-swap_in_basic_0010:
-    clr $ffde
-swap_in_basic_0020:
     andcc #$af
+    rts
   }
 }
 
-bool doing_load = FALSE;
-#define bprintf(...) { swap_in_basic(); printf(__VA_ARGS__); swap_out_basic(); }
-#define fprintf(x, y, ...) bprintf(y, __VA_ARGS__)
-
-// Swaps Basic back out and turns on interrupts.
-void swap_out_basic() {
+// Swaps Basic back out and turns off interrupts.
+asm void swap_out_basic() {
   asm {
     orcc #$50
-    tst isCoCo3
-    beq swap_out_basic_0010
     ldd #$3031
     sta $ffa4
     stb $ffa5
     ldd #$3233
     sta $ffa6
     stb $ffa7
-    bra swap_out_basic_0020
-swap_out_basic_0010:
-    clr $ffdf
-swap_out_basic_0020:
+    rts
   }
 }
 
@@ -480,13 +516,27 @@ static Obj *read_expr(void *root);
 #define EOF 0
 
 
-char buffer[512];
+#define SCREEN_WIDTH 80
+#define SCREEN_BUFFER_HEIGHT 3
+#define INPUT_BUFFER_SIZE (SCREEN_WIDTH * SCREEN_BUFFER_HEIGHT)
+#if SCREEN_WIDTH == 32
+#define screen_ptr ((char **)0x88)
+#define SCREEN_BYTES_PER_CHAR 1
+#else
+#define screen_ptr ((char **)0xfe00)
+#define SCREEN_BYTES_PER_CHAR 2
+#define screen_x ((char *)0xfe02)
+#define screen_y ((char *)0xfe03)
+#endif
+char bff[INPUT_BUFFER_SIZE];
+char *buffer = bff;
 byte has_data = false;
 char *start_pos;
 char *end_pos;
 struct FileDesc fd;
 bool has_file_data = FALSE;
 char file_data;
+char last_char;
 char getchar() {
   // If there is any buffered file data, return it now
   if (has_file_data) {
@@ -507,7 +557,9 @@ char getchar() {
 
   // If we have data buffered already, simply return that data.
   if (has_data) {
+    MAP_IN_INPUT_BUFFER;
     char c = *start_pos++;
+    MAP_OUT_INPUT_BUFFER;
     if (start_pos >= end_pos) {
       has_data = false;
     }
@@ -517,16 +569,34 @@ char getchar() {
   start_pos = end_pos = buffer;
   has_data = true;
   while(true) {
-    char c;
-    swap_in_basic();
-    for(c = waitkey(true); c == 0; c = inkey());
-    swap_out_basic();
+    swap_in_basic_for_print();
+    last_char = waitkey(true);
+    swap_out_basic_after_print();
 
     // Process backspace
+    char c = last_char;
     if ((c == 8) && (end_pos > start_pos)) {
       end_pos--;
+      MAP_IN_INPUT_BUFFER;
       *end_pos = ' ';
-      *screen_ptr = *screen_ptr - 1;
+      MAP_OUT_INPUT_BUFFER;
+      *screen_ptr = *screen_ptr - SCREEN_BYTES_PER_CHAR;
+      if (screen_x == 0) {
+        *screen_x = SCREEN_WIDTH - 1;
+        *screen_y = *screen_y - 1;
+      } else {
+        *screen_x = *screen_x - 1;
+      }
+#if SCREEN_WIDTH != 32
+      bprintf(" ");
+      *screen_ptr = *screen_ptr -  SCREEN_BYTES_PER_CHAR;
+      if (screen_x == 0) {
+        *screen_x = SCREEN_WIDTH - 1;
+        *screen_y = *screen_y - 1;
+      } else {
+        *screen_x = *screen_x - 1;
+      }
+#endif
       continue;
     }
 
@@ -534,7 +604,7 @@ char getchar() {
     if ((c == 3) || (c == '\r')) {
       // Don't go over a full screen minus last line
       if (c == '\r') {
-        if ((end_pos - start_pos) >= (sizeof(buffer) - 32)) {
+        if ((end_pos - start_pos) >= (INPUT_BUFFER_SIZE - SCREEN_BYTES_PER_CHAR * SCREEN_WIDTH)) {
           continue;
         }
       }
@@ -544,16 +614,21 @@ char getchar() {
       bprintf("\n");
       char *after = *screen_ptr;
       if (after <= before) {
-        after = after + 32;
+        after = after + SCREEN_BYTES_PER_CHAR * SCREEN_WIDTH;
       }
 
       // Fill in buffer with spaces
-      memset(end_pos, ' ', after - before);
-      end_pos += after - before;
+      unsigned delta = (after - before) / SCREEN_BYTES_PER_CHAR;
+      MAP_IN_INPUT_BUFFER;
+      memset(end_pos, ' ', delta);
+      MAP_OUT_INPUT_BUFFER;
+      end_pos += delta;
 
       // If break was pressed, begin processing data
       if (c == 3) {
+        MAP_IN_INPUT_BUFFER;
         c = *start_pos++;
+        MAP_OUT_INPUT_BUFFER;
         if (start_pos > end_pos) {
           has_data = false;
         }
@@ -563,15 +638,17 @@ char getchar() {
     }
 
     // Process a normal char
-    if ((end_pos) - start_pos >= (sizeof(buffer) - 1)) {
+    if (end_pos - start_pos >= (INPUT_BUFFER_SIZE - 1)) {
       continue;
     }
-    if (c >= 32) {
-      if (end_pos >= start_pos + sizeof(buffer)) {
-        start_pos = start_pos - 32;
+    if (c >= ' ') {
+      if (end_pos >= start_pos + INPUT_BUFFER_SIZE) {
+        start_pos = start_pos - SCREEN_WIDTH;
       }
       bprintf("%c", c);
+      MAP_IN_INPUT_BUFFER;
       *end_pos++ = c;
+      MAP_OUT_INPUT_BUFFER;
     }
   }
 }
@@ -589,7 +666,9 @@ void ungetc(char c, byte ignore) {
   }
   has_data = true;
   --start_pos;
+  MAP_IN_INPUT_BUFFER;
   *start_pos = c;
+  MAP_OUT_INPUT_BUFFER;
   return;
 }
 
@@ -760,16 +839,12 @@ static void print(Obj *obj) {
     case type:                                                   \
         memcpy(generic_buffer, y, sizeof(generic_buffer) - 1);   \
         generic_buffer[sizeof(generic_buffer)-1] = '\0';         \
-        swap_in_basic();                                         \
-        printf(x, generic_buffer);                               \
-        swap_out_basic();                                        \
+        bprintf(x, generic_buffer);                              \
         return
 #define CASE3(type, x, y)                                        \
     case type:                                                   \
         tmp = y;                                                 \
-        swap_in_basic();                                         \
-        printf(x, tmp);                                          \
-        swap_out_basic();                                        \
+        bprintf(x, tmp);                                         \
         return
     CASE3(TINT, "%d", obj->val.value);
     CASE2(TSYMBOL, "%s", obj->val.name);
@@ -1331,19 +1406,18 @@ static bool getEnvFlag(char *name) {
 
 int main() {
     initCoCoSupport();
-    asm {
-      ldd #$3950
-      sta 359
-      stb 65314
-      clr 282
-    }
     setHighSpeed(TRUE);
-    width(32);
-    swap_out_basic();
+
+    swap_in_basic_for_print();
+    width(SCREEN_WIDTH);
+    swap_out_basic_after_print();
     bprintf("Color Computer MiniLisp 0.3.2\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
+
+    // Force lowercase mode
+    asm { clr 282 }
 
     // Memory allocation
     memory = (void *)memory1;
