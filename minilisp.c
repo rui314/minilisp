@@ -605,6 +605,7 @@ char getchar() {
       unsigned delta = (after - before) / SCREEN_BYTES_PER_CHAR;
       MAP_IN_INPUT_BUFFER;
       memset(end_pos, ' ', delta);
+      *end_pos = '\r';
       MAP_OUT_INPUT_BUFFER;
       end_pos += delta;
 
