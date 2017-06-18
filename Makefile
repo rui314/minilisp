@@ -35,9 +35,6 @@ clean :
 run : $(TARGET)
 	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/rgb
 
-run2b : $(TARGET)
-	$(MESS) coco2b -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/coco2b
-
 run_cmp : $(TARGET)
 	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/cmp
 

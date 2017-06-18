@@ -1,8 +1,8 @@
 MINILISP
 ========
 
-MINILISP is a TRS-80 Color Computer port of Rui Ueyama
-minilisp which can be found on [https://github.com/rui314/minilisp](https://github.com/rui314/minilisp).
+MINILISP is a TRS-80 Color Computer 3 port of Rui Ueyama's
+minilisp that can be found on [https://github.com/rui314/minilisp](https://github.com/rui314/minilisp).
 
 It supports most of the features of minilisp including the following:
 
@@ -23,6 +23,17 @@ Compile
     $ make
 
 Will create a minilisp.dsk image that can be used with MESS.
+
+
+Running
+-------
+MiniLisp require's a Color Computer 3 or emulator with at least 128KB of
+RAM and one disk drive.
+
+To run MiniLisp, insert `minilisp.dsk` into the drive and type the following:
+```
+RUN "*"
+```
 
 
 Language features
