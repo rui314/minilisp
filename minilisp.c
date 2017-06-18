@@ -48,7 +48,7 @@ bool doing_load = FALSE;
 // operations, we need to store the old stack pointer and move the stack to
 // this area. This is because BASIC maps the 40 and 80 column screen memory to
 // 0x2000 and 0x4000 which will overlap with our stack.
-byte stack[32];
+byte stack[128];
 void *stack_ptr;
 
 
@@ -517,16 +517,17 @@ static Obj *read_expr(void *root);
 
 
 #define SCREEN_WIDTH 80
-#define SCREEN_BUFFER_HEIGHT 24
 #define INPUT_BUFFER_SIZE (SCREEN_WIDTH * SCREEN_BUFFER_HEIGHT)
 #if SCREEN_WIDTH == 32
 #define screen_ptr ((char **)0x88)
 #define SCREEN_BYTES_PER_CHAR 1
+#define SCREEN_BUFFER_HEIGHT 16
 #else
 #define screen_ptr ((char **)0xfe00)
 #define SCREEN_BYTES_PER_CHAR 2
 #define screen_x ((char *)0xfe02)
 #define screen_y ((char *)0xfe03)
+#define SCREEN_BUFFER_HEIGHT 24
 #endif
 char *buffer = (char *)0x8000;
 byte has_data = false;
@@ -1394,7 +1395,7 @@ int main() {
     swap_in_basic_for_print();
     width(SCREEN_WIDTH);
     swap_out_basic_after_print();
-    bprintf("Color Computer MiniLisp 0.3.2\n");
+    bprintf("Color Computer MiniLisp 0.4.0\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
