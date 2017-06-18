@@ -1,7 +1,7 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x3800
+#pragma org 0x3900
 
 #include <cmoc.h>
 #include <stdarg.h>
@@ -34,13 +34,13 @@ bool doing_load = FALSE;
 
 
 // We map in an area of memory from 0x8000 to 0xA000 to store our input buffer
-#define MAP_IN_INPUT_BUFFER asm { \
-  lda #$34 \
-  sta $ffa4 \
+#define MAP_IN_INPUT_BUFFER { \
+  asm { lda #$35 }\
+  asm { sta $ffa4 }\
 }
-#define MAP_OUT_INPUT_BUFFER asm { \
-  lda #$30 \
-  sta $ffa4 \
+#define MAP_OUT_INPUT_BUFFER { \
+  asm { lda #$30 }\
+  asm { sta $ffa4 }\
 }
 
 
@@ -517,7 +517,7 @@ static Obj *read_expr(void *root);
 
 
 #define SCREEN_WIDTH 80
-#define SCREEN_BUFFER_HEIGHT 3
+#define SCREEN_BUFFER_HEIGHT 24
 #define INPUT_BUFFER_SIZE (SCREEN_WIDTH * SCREEN_BUFFER_HEIGHT)
 #if SCREEN_WIDTH == 32
 #define screen_ptr ((char **)0x88)
@@ -528,8 +528,7 @@ static Obj *read_expr(void *root);
 #define screen_x ((char *)0xfe02)
 #define screen_y ((char *)0xfe03)
 #endif
-char bff[INPUT_BUFFER_SIZE];
-char *buffer = bff;
+char *buffer = (char *)0x8000;
 byte has_data = false;
 char *start_pos;
 char *end_pos;
@@ -576,27 +575,11 @@ char getchar() {
     // Process backspace
     char c = last_char;
     if ((c == 8) && (end_pos > start_pos)) {
+      bprintf("%c", c);
       end_pos--;
       MAP_IN_INPUT_BUFFER;
       *end_pos = ' ';
       MAP_OUT_INPUT_BUFFER;
-      *screen_ptr = *screen_ptr - SCREEN_BYTES_PER_CHAR;
-      if (screen_x == 0) {
-        *screen_x = SCREEN_WIDTH - 1;
-        *screen_y = *screen_y - 1;
-      } else {
-        *screen_x = *screen_x - 1;
-      }
-#if SCREEN_WIDTH != 32
-      bprintf(" ");
-      *screen_ptr = *screen_ptr -  SCREEN_BYTES_PER_CHAR;
-      if (screen_x == 0) {
-        *screen_x = SCREEN_WIDTH - 1;
-        *screen_y = *screen_y - 1;
-      } else {
-        *screen_x = *screen_x - 1;
-      }
-#endif
       continue;
     }
 
@@ -1344,13 +1327,13 @@ static void define_constants(void *root, Obj **env) {
 
 // (load <symbol>)
 static Obj *prim_load(void *root, Obj **env, Obj **list) {
-    if (doing_load)
-      return Nil;
-
     Obj *args = eval_list(root, env, list);
     if (args->val.cell.car->type != TSYMBOL) {
         error("Malformed %s\n", "load");
     }
+
+    if (doing_load)
+      return Nil;
 
     char filebuf[13];
     strncpy(filebuf, args->val.cell.car->val.name, 8);
@@ -1443,6 +1426,7 @@ int main() {
 
     // The main loop
     setjmp(&jmpbuf);
+    swap_out_basic_after_print();
     has_file_data = FALSE;
     if (doing_load) {
       bclose(&fd);
@@ -1450,7 +1434,7 @@ int main() {
     for (;;) {
         *expr = read_expr(root);
         if (!*expr)
-            return 0;
+            continue;
         if (*expr == Cparen)
             error("Stray close parenthesis\n");
         if (*expr == Dot)
@@ -1458,4 +1442,6 @@ int main() {
         print(eval(root, env, expr));
         bprintf("\n");
     }
+
+    return 0;
 }
