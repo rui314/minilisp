@@ -35,7 +35,7 @@ bool doing_load = FALSE;
 
 // We map in an area of memory from 0x8000 to 0xA000 to store our input buffer
 #define MAP_IN_INPUT_BUFFER { \
-  asm { lda #$35 }\
+  asm { lda #$34 }\
   asm { sta $ffa4 }\
 }
 #define MAP_OUT_INPUT_BUFFER { \
