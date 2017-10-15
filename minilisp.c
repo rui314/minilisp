@@ -1,7 +1,7 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x3900
+#pragma org 0x36d0
 
 #include <cmoc.h>
 #include <stdarg.h>
@@ -48,7 +48,6 @@ bool doing_load = FALSE;
 // operations, we need to store the old stack pointer and move the stack to
 // this area. This is because BASIC maps the 40 and 80 column screen memory to
 // 0x2000 and 0x4000 which will overlap with our stack.
-byte stack[128];
 void *stack_ptr;
 
 
@@ -59,7 +58,7 @@ asm void swap_in_basic_for_print() {
     orcc #$50
     puls d
     sts stack_ptr
-    leas stack_ptr
+    lds #$600
     pshs d
     bra swap_in_basic
   }
