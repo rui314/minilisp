@@ -5,7 +5,7 @@ TARGET_BIN=$(TARGET:.dsk=.bin)
 TARGET_C=$(TARGET:.dsk=.c)
 
 MESS_DIR=~/Applications/mame
-MESS=$(MESS_DIR)/mess64
+MESS=$(MESS_DIR)/mame64
 
 $(TARGET) : $(TARGET_BAS) $(TARGET_BIN) fact.lsp fib.lsp life.lsp nqueens.lsp drwho.lsp
 	rm -f $@

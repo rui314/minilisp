@@ -1,7 +1,7 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x36d0
+#pragma org 0x3780
 
 #include <cmoc.h>
 #include <stdarg.h>
@@ -44,10 +44,10 @@ bool doing_load = FALSE;
 }
 
 
-// These variables must be kept together in this order. When we perform print
-// operations, we need to store the old stack pointer and move the stack to
-// this area. This is because BASIC maps the 40 and 80 column screen memory to
-// 0x2000 and 0x4000 which will overlap with our stack.
+// When we perform print operations, we store the old stack pointer and move the stack
+// to 0x500. This is because BASIC maps the 40 and 80 column screen memory to
+// 0x2000 and 0x4000 which will overlap with our stack. 0x500 is in the middle of
+// the 32x16 text screen memory.
 void *stack_ptr;
 
 
@@ -58,7 +58,7 @@ asm void swap_in_basic_for_print() {
     orcc #$50
     puls d
     sts stack_ptr
-    lds #$600
+    lds #$500
     pshs d
     bra swap_in_basic
   }
@@ -152,7 +152,7 @@ jmp_buf jmpbuf;
 
 // The Lisp object type
     // Regular objects visible from the user
-#define    TINT 1
+#define    TLONG 1
 #define    TCELL 2
 #define    TSYMBOL 3
 #define    TPRIMITIVE 4
@@ -184,8 +184,8 @@ typedef struct Obj {
 
     // Object values.
     union val {
-        // Int
-        int value;
+        // long
+        long value;
         // Cell
         struct cell {
             struct Obj *car;
@@ -412,7 +412,7 @@ static void gc(void *root) {
     // the to-space.
     while (scan1 < scan2) {
         switch (scan1->type) {
-        case TINT:
+        case TLONG:
         case TSYMBOL:
         case TPRIMITIVE:
             // Any of the above types does not contain a pointer to a GC-managed object.
@@ -450,8 +450,8 @@ static void gc(void *root) {
 // Constructors
 //======================================================================
 
-static Obj *make_int(void *root, int value) {
-    Obj *r = alloc(root, TINT, sizeof(int));
+static Obj *make_long(void *root, long value) {
+    Obj *r = alloc(root, TLONG, sizeof(long));
     r->val.value = value;
     return r;
 }
@@ -504,7 +504,7 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
-#define SYMBOL_MAX_LEN 200
+#define SYMBOL_MAX_LEN 50
 byte generic_buffer[SYMBOL_MAX_LEN + 1];
 const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
 
@@ -517,17 +517,11 @@ static Obj *read_expr(void *root);
 
 #define SCREEN_WIDTH 80
 #define INPUT_BUFFER_SIZE (SCREEN_WIDTH * SCREEN_BUFFER_HEIGHT)
-#if SCREEN_WIDTH == 32
-#define screen_ptr ((char **)0x88)
-#define SCREEN_BYTES_PER_CHAR 1
-#define SCREEN_BUFFER_HEIGHT 16
-#else
 #define screen_ptr ((char **)0xfe00)
 #define SCREEN_BYTES_PER_CHAR 2
 #define screen_x ((char *)0xfe02)
 #define screen_y ((char *)0xfe03)
 #define SCREEN_BUFFER_HEIGHT 24
-#endif
 char *buffer = (char *)0x8000;
 byte has_data = false;
 char *start_pos;
@@ -746,14 +740,14 @@ static Obj *read_quote(void *root) {
     return *tmp;
 }
 
-static int read_number(int val) {
+static long read_number(long val) {
     while (isdigit(peek()))
         val = val * 10 + (getchar() - '0');
     return val;
 }
 
 static Obj *read_symbol(void *root, char c) {
-    char buf[SYMBOL_MAX_LEN + 1];
+    char *buf = (char *)generic_buffer;
     buf[0] = c;
     int len = 1;
     while (isalnum(peek()) || strchr(symbol_chars, peek())) {
@@ -785,9 +779,9 @@ static Obj *read_expr(void *root) {
         if (c == '\'')
             return read_quote(root);
         if (isdigit(c))
-            return make_int(root, read_number(c - '0'));
+            return make_long(root, read_number(c - '0'));
         if (c == '-' && isdigit(peek()))
-            return make_int(root, -read_number(0));
+            return make_long(root, -read_number(0));
         if (isalpha(c) || strchr(symbol_chars, c))
             return read_symbol(root, c);
         error("Don't know how to handle %c", c);
@@ -796,7 +790,7 @@ static Obj *read_expr(void *root) {
 
 // Prints the given object.
 static void print(Obj *obj) {
-    int tmp;
+    long tmp;
     switch (obj->type) {
     case TCELL:
         bprintf("(");
@@ -830,7 +824,7 @@ static void print(Obj *obj) {
         tmp = y;                                                 \
         bprintf(x, tmp);                                         \
         return
-    CASE3(TINT, "%d", obj->val.value);
+    CASE3(TLONG, "%ld", obj->val.value);
     CASE2(TSYMBOL, "%s", obj->val.name);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
@@ -966,7 +960,7 @@ static Obj *macroexpand(void *root, Obj **env, Obj **obj) {
 // Evaluates the S expression.
 static Obj *eval(void *root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
-    case TINT:
+    case TLONG:
     case TPRIMITIVE:
     case TFUNCTION:
     case TTRUE:
@@ -1033,6 +1027,7 @@ static Obj *prim_car(void *root, Obj **env, Obj **list) {
 static Obj *prim_cdr(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     if (args->val.cell.car->type != TCELL || args->val.cell.cdr != Nil) {
+        int v = args->val.cell.car->type;
         error("Malformed %s\n", "cdr");
     }
     return args->val.cell.car->val.cell.cdr;
@@ -1088,27 +1083,27 @@ static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
 
 // (+ <integer> ...)
 static Obj *prim_plus(void *root, Obj **env, Obj **list) {
-    int sum = 0;
+    long sum = 0;
     for (Obj *args = eval_list(root, env, list); args != Nil; args = args->val.cell.cdr) {
-        if (args->val.cell.car->type != TINT) {
+        if (args->val.cell.car->type != TLONG) {
             error("%s takes only numbers\n", "+");
         }
         sum += args->val.cell.car->val.value;
     }
-    return make_int(root, sum);
+    return make_long(root, sum);
 }
 
 
 // (* <integer> ...)
 static Obj *prim_mult(void *root, Obj **env, Obj **list) {
-    int prod = 1;
+    long prod = 1;
     for (Obj *args = eval_list(root, env, list); args != Nil; args = args->val.cell.cdr) {
-        if (args->val.cell.car->type != TINT) {
+        if (args->val.cell.car->type != TLONG) {
             error("%s takes only numbers\n", "*");
         }
         prod *= args->val.cell.car->val.value;
     }
-    return make_int(root, prod);
+    return make_long(root, prod);
 }
 
 
@@ -1116,15 +1111,15 @@ static Obj *prim_mult(void *root, Obj **env, Obj **list) {
 static Obj *prim_minus(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     for (Obj *p = args; p != Nil; p = p->val.cell.cdr)
-        if (p->val.cell.car->type != TINT) {
+        if (p->val.cell.car->type != TLONG) {
             error("%s takes only numbers\n", "-");
         }
     if (args->val.cell.cdr == Nil)
-        return make_int(root, -args->val.cell.car->val.value);
-    int r = args->val.cell.car->val.value;
+        return make_long(root, -args->val.cell.car->val.value);
+    long r = args->val.cell.car->val.value;
     for (Obj *p = args->val.cell.cdr; p != Nil; p = p->val.cell.cdr)
         r -= p->val.cell.car->val.value;
-    return make_int(root, r);
+    return make_long(root, r);
 }
 
 // (< <integer> <integer>)
@@ -1135,7 +1130,7 @@ static Obj *prim_lt(void *root, Obj **env, Obj **list) {
     }
     Obj *x = args->val.cell.car;
     Obj *y = args->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT) {
+    if (x->type != TLONG || y->type != TLONG) {
         error("%s takes only numbers\n", "<");
     }
     return x->val.value < y->val.value ? True : Nil;
@@ -1234,73 +1229,73 @@ static Obj *prim_if(void *root, Obj **env, Obj **list) {
     return *els == Nil ? Nil : progn(root, env, els);
 }
 
-// (= <integer> <integer>)
-static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
+typedef enum NUM_CMP_OPT {
+    NUM_CMP_OPT_EQ = 0,
+    NUM_CMP_OPT_GT,
+    NUM_CMP_OPT_LT,
+    NUM_CMP_OPT_GTE,
+    NUM_CMP_OPT_LTE
+} NUM_CMP_OPT;
+
+static Obj *prim_num_cmp(void *root, Obj **env, Obj **list, NUM_CMP_OPT opt, char *label) {
     if (length(*list) != 2) {
         error("Malformed %s\n", "=");
     }
+
     Obj *values = eval_list(root, env, list);
     Obj *x = values->val.cell.car;
     Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT)
-        error("%s only takes numbers\n", "=");
-    return x->val.value == y->val.value ? True : Nil;
+    if (x->type != TLONG || y->type != TLONG)
+        error("%s only takes numbers\n", label);
+    long v1 = x->val.value;
+    long v2 = y->val.value;
+
+    bool result;
+    switch(opt) {
+        case NUM_CMP_OPT_EQ:
+            result = (v1 == v2);
+            break;
+        case NUM_CMP_OPT_GT:
+            result = (v1 > v2);
+            break;
+        case NUM_CMP_OPT_LT:
+            result = (v1 < v2);
+            break;
+        case NUM_CMP_OPT_GTE:
+            result = (v1 >= v2);
+            break;
+        case NUM_CMP_OPT_LTE:
+            result = (v1 <= v2);
+            break;
+        default:
+            result = FALSE;
+  }
+  return result ? True : Nil;
+}
+
+// (= <integer> <integer>)
+static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
+    return prim_num_cmp(root, env, list, NUM_CMP_OPT_EQ, "=");
 }
 
 // (< <integer> <integer>)
 static Obj *prim_num_lt(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2) {
-        error("Malformed %s\n", "<");
-    }
-    Obj *values = eval_list(root, env, list);
-    Obj *x = values->val.cell.car;
-    Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT) {
-        error("%s only takes numbers\n", "<");
-    }
-    return x->val.value < y->val.value ? True : Nil;
+    return prim_num_cmp(root, env, list, NUM_CMP_OPT_LT, "<");
 }
 
 // (> <integer> <integer>)
 static Obj *prim_num_gt(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2) {
-        error("Malformed %s\n", "<");
-    }
-    Obj *values = eval_list(root, env, list);
-    Obj *x = values->val.cell.car;
-    Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT) {
-        error("%s only takes numbers\n", ">");
-    }
-    return x->val.value > y->val.value ? True : Nil;
+    return prim_num_cmp(root, env, list, NUM_CMP_OPT_GT, ">");
 }
 
 // (<= <integer> <integer>)
 static Obj *prim_num_lte(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2) {
-        error("Malformed %s\n", "<=");
-    }
-    Obj *values = eval_list(root, env, list);
-    Obj *x = values->val.cell.car;
-    Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT) {
-        error("%s only takes numbers\n", "<=");
-    }
-    return x->val.value <= y->val.value ? True : Nil;
+    return prim_num_cmp(root, env, list, NUM_CMP_OPT_LTE, "<=");
 }
 
 // (>= <integer> <integer>)
 static Obj *prim_num_gte(void *root, Obj **env, Obj **list) {
-    if (length(*list) != 2) {
-        error("Malformed %s\n", ">=");
-    }
-    Obj *values = eval_list(root, env, list);
-    Obj *x = values->val.cell.car;
-    Obj *y = values->val.cell.cdr->val.cell.car;
-    if (x->type != TINT || y->type != TINT) {
-        error("%s only takes numbers\n", ">=");
-    }
-    return x->val.value >= y->val.value ? True : Nil;
+    return prim_num_cmp(root, env, list, NUM_CMP_OPT_GTE, ">=");
 }
 
 // (eq expr expr)
@@ -1388,14 +1383,28 @@ static bool getEnvFlag(char *name) {
 }
 
 
+static void exit_if_broken_mame() {
+    long val1 = 0;
+    long val2 = -1;
+    long *v1 = &val1;
+    long *v2 = &val2;
+
+    if (*v1 <= *v2) {
+      printf("REQUIRES MAME 0.191 OR LATER");
+      exit(0);
+    }
+}
+
+
 int main() {
     initCoCoSupport();
+    exit_if_broken_mame();
     setHighSpeed(TRUE);
 
     swap_in_basic_for_print();
     width(SCREEN_WIDTH);
     swap_out_basic_after_print();
-    bprintf("Color Computer MiniLisp 0.4.0\n");
+    bprintf("Color Computer MiniLisp 0.5.0\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
