@@ -1,4 +1,4 @@
-CFLAGS=-O2 --limit=0x7fff --org=0x3754
+CFLAGS=-O2 --limit=0x7fff --org=0x3791
 TARGET=minilisp.dsk
 TARGET_BAS=$(TARGET:.dsk=.bas)
 TARGET_BIN=$(TARGET:.dsk=.bin)

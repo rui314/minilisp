@@ -16,12 +16,7 @@
 #define NULL 0
 #define true TRUE
 
-byte disk_buffer[68];
-bool doing_load = FALSE;
-#define sbrk(x) (disk_buffer)
 #include <disk.h>
-#undef sbrk
-
 #include "setjmp.h"
 #include "setjmp.c"
 
@@ -101,6 +96,7 @@ asm void swap_out_basic() {
   }
 }
 
+bool doing_load = FALSE;
 void bclose(struct FileDesc *fd) {
     doing_load = FALSE;
     swap_in_basic();
