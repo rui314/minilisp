@@ -1,8 +1,6 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#pragma org 0x3780
-
 #include <cmoc.h>
 #include <stdarg.h>
 #include <coco.h>
@@ -45,11 +43,10 @@ bool doing_load = FALSE;
 
 
 // When we perform print operations, we store the old stack pointer and move the stack
-// to 0x500. This is because BASIC maps the 40 and 80 column screen memory to
+// to 0x600. This is because BASIC maps the 40 and 80 column screen memory to
 // 0x2000 and 0x4000 which will overlap with our stack. 0x500 is in the middle of
 // the 32x16 text screen memory.
 void *stack_ptr;
-
 
 // Swaps Basic back in, turns on interrupts, moves stack
 // so that print opertions will work.
@@ -58,7 +55,7 @@ asm void swap_in_basic_for_print() {
     orcc #$50
     puls d
     sts stack_ptr
-    lds #$500
+    lds #$600
     pshs d
     bra swap_in_basic
   }
@@ -1395,16 +1392,20 @@ static void exit_if_broken_mame() {
     }
 }
 
+// sbrk will not work when we clear memory so we allocate a local fat buffer
+extern byte *fatBuffer;
+byte localFatBuffer[68];
 
 int main() {
     initCoCoSupport();
+    fatBuffer = localFatBuffer; // init fatBuffer to avoid sbrk
     exit_if_broken_mame();
     setHighSpeed(TRUE);
 
     swap_in_basic_for_print();
     width(SCREEN_WIDTH);
     swap_out_basic_after_print();
-    bprintf("Color Computer MiniLisp 0.5.0\n");
+    bprintf("Color Computer MiniLisp 0.5.1\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
