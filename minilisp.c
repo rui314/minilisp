@@ -13,6 +13,7 @@
 #define ptrdiff_t int
 #define false FALSE
 #define const
+#undef NULL
 #define NULL 0
 #define true TRUE
 
@@ -911,12 +912,14 @@ static Obj *apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
     return progn(root, newenv, body);
 }
 
+typedef Obj *(*PrimitiveFuncPtr)(void *, Obj **, Obj **);
+
 // Apply fn with args.
 static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
     if (!is_list(*args))
         error("Argument must be a list\n");
     if ((*fn)->type == TPRIMITIVE)
-        return (Obj *)(*fn)->val.fn(root, env, args);
+        return (Obj *) ((PrimitiveFuncPtr) (*fn)->val.fn)(root, env, args);
     if ((*fn)->type == TFUNCTION) {
         DEFINE1(eargs);
         *eargs = eval_list(root, env, args);
