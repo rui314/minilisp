@@ -6,3 +6,7 @@ minilisp
 *.hex
 *.i
 *.asm
+*.s
+*.map
+*.link
+

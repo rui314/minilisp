@@ -30,7 +30,7 @@ $(TARGET_BIN) : $(TARGET_C)
 	cmoc $(CFLAGS) $< 
 
 clean :
-	rm -rf $(TARGET) *.bin *.i *.lst *.asm *.hex
+	rm -rf $(TARGET) *.bin *.i *.lst *.asm *.hex *.s *.map *.link
 
 run : $(TARGET)
 	$(MESS) coco3 -rompath $(MESS_DIR)/roms -window -flop1 $(TARGET) -cfg_directory cfgs/rgb
