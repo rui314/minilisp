@@ -9,4 +9,4 @@ minilisp
 *.s
 *.map
 *.link
-
+*.o

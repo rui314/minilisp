@@ -119,7 +119,7 @@ word bread(struct FileDesc *fd, char *buf, word numBytesRequested) {
 byte bopen(struct FileDesc *fd, char *filename) {
     swap_in_basic();
     setHighSpeed(FALSE);
-    byte bopen_result = open(fd, filename);
+    byte bopen_result = openfile(fd, filename);
     setHighSpeed(TRUE);
     swap_out_basic();
     doing_load = bopen_result;
