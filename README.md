@@ -19,8 +19,9 @@ It supports most of the features of minilisp including the following:
 
 Compile
 -------
+Building requires Docker 17 or later.
 
-    $ make
+    $ ./build
 
 Will create a minilisp.dsk image that can be used with MESS.
 
