@@ -12,7 +12,6 @@
 #define static
 #define ptrdiff_t int
 #define false FALSE
-#define const
 #undef NULL
 #define NULL 0
 #define true TRUE
@@ -457,7 +456,7 @@ static Obj *cons(void *root, Obj **car, Obj **cdr) {
     return cell;
 }
 
-static Obj *make_symbol(void *root, char *name) {
+static Obj *make_symbol(void *root, const char *name) {
     Obj *sym = alloc(root, TSYMBOL, strlen(name) + 1);
     strcpy(sym->val.name, name);
     return sym;
@@ -714,7 +713,7 @@ static Obj *read_list(void *root) {
 
 // May create a new symbol. If there's a symbol with the same name, it will not create a new symbol
 // but return the existing one.
-static Obj *intern(void *root, char *name) {
+static Obj *intern(void *root, const char *name) {
     for (Obj *p = Symbols; p != Nil; p = p->val.cell.cdr)
         if (strcmp(name, p->val.cell.car->val.name) == 0)
             return p->val.cell.car;
@@ -1233,7 +1232,7 @@ typedef enum NUM_CMP_OPT {
     NUM_CMP_OPT_LTE
 } NUM_CMP_OPT;
 
-static Obj *prim_num_cmp(void *root, Obj **env, Obj **list, NUM_CMP_OPT opt, char *label) {
+static Obj *prim_num_cmp(void *root, Obj **env, Obj **list, NUM_CMP_OPT opt, const char *label) {
     if (length(*list) != 2) {
         error("Malformed %s\n", "=");
     }
@@ -1303,7 +1302,7 @@ static Obj *prim_eq(void *root, Obj **env, Obj **list) {
     return values->val.cell.car == values->val.cell.cdr->val.cell.car ? True : Nil;
 }
 
-static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
+static void add_primitive(void *root, Obj **env, const char *name, Primitive *fn) {
     DEFINE2(sym, prim);
     *sym = intern(root, name);
     *prim = make_primitive(root, fn);
@@ -1404,7 +1403,7 @@ int main() {
     swap_in_basic_for_print();
     width(SCREEN_WIDTH);
     swap_out_basic_after_print();
-    bprintf("Color Computer MiniLisp 0.5.1\n");
+    bprintf("Color Computer MiniLisp 0.5.2\n");
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");
