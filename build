@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 
-export DOCKER_IMAGE=jamieleecho/coco-dev:0.10
+export DOCKER_IMAGE=jamieleecho/coco-dev:0.12
 docker run --rm --volume `pwd`:/home/coco-dev --workdir /home/coco-dev $DOCKER_IMAGE make "$@"
