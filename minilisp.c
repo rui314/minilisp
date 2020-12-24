@@ -552,7 +552,7 @@ static Obj *prim_defun(Obj *env, Obj *list) {
 // (define <symbol> expr)
 static Obj *prim_define(Obj *env, Obj *list) {
     if (list_length(list) != 2 || list->car->type != TSYMBOL)
-        error("Malformed setq");
+        error("Malformed define");
     Obj *sym = list->car;
     Obj *value = eval(env, list->cdr->car);
     add_variable(env, sym, value);
