@@ -1,7 +1,7 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
-#define VERSION "Color Computer MiniLisp 0.5.2\n"
+#define VERSION "Color Computer MiniLisp 0.6\n"
 
 #include <cmoc.h>
 #include <stdarg.h>
