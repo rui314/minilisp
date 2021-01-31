@@ -1,0 +1,22 @@
+name: Bump and Tag Version
+
+on: [workflow_dispatch]
+
+jobs:
+  bump:
+    if: "!contains(github.event.head_commit.author.name, 'version-bumper')"
+    runs-on: ubuntu-latest
+   
+    steps:
+      # Checkout action is required
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.ADMIN_TOKEN }}
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '12'
+      - name: Bump Versions
+        uses: michmich112/version-bumper@master
+        with:
+          options-file: './bump-info.json'
+          github-token: ${{ secrets.ADMIN_TOKEN }}

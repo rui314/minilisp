@@ -1,0 +1,13 @@
+name: Build
+
+on:
+  - push
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    container: jamieleecho/coco-dev:0.31
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build
+        run: make
