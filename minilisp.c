@@ -1,6 +1,8 @@
 //// This software is in the public domain.
 // Originally from: https://github.com/rui314/minilisp
 
+#define VERSION "Color Computer MiniLisp 0.5.2\n"
+
 #include <cmoc.h>
 #include <stdarg.h>
 #include <coco.h>
@@ -1403,7 +1405,7 @@ int main() {
     swap_in_basic_for_print();
     width(SCREEN_WIDTH);
     swap_out_basic_after_print();
-    bprintf("Color Computer MiniLisp 0.5.2\n");
+    bprintf(VERSION);
     bprintf("Original by Rui Ueyama\n");
     bprintf("CoCo port: Jamie Cho\n\n");
     bprintf("Press <BREAK> to eval commands\n\n");

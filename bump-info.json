@@ -1,0 +1,15 @@
+{
+  "scheme": "custom",
+  "schemeDefinition": "major.minor[.build][->patch]",
+  "versionFile": "./package.json",
+  "files": [{
+    "path": "minilisp.c",
+    "line": 4
+  }],
+  "rules": [{
+      "trigger": "manual",
+      "bump": "minor",
+      "branch": "main",
+      "reset": "build"
+  }]
+}

@@ -1,0 +1,26 @@
+name: Make a New Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    container: jamieleecho/coco-dev:0.31
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build
+        run: make
+      - name: Get the tag
+        run: |
+          echo "RELEASE_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> $GITHUB_ENV
+      - uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "./*.dsk"
+          allowUpdates: true
+          draft: true
+          name: "${{ format('{0} {1}', env.REPO_NAME, env.RELEASE_TAG) }}"
