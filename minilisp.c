@@ -646,19 +646,6 @@ void ungetc(char c, byte ignore) {
 }
 
 
-bool isdigit(char c) {
-  return c >= '0' && c <= '9';
-}
-
-bool isalnum(char c) {
-  return (c >= '0' && c <= '9') || (c >= 'a' && c <='z') ||
-         (c >= 'A' && c <= 'Z');
-}
-
-bool isalpha(char c) {
-  return (c >= 'a' && c <='z') || (c >= 'A' && c <= 'Z');
-}
-
 char peek(void) {
     char c = getchar();
     ungetc(c, stdin);
