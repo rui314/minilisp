@@ -1,5 +1,11 @@
 // This software is in the public domain.
 
+#ifdef _WIN32
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+#endif
+
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -9,9 +15,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#define ATTR_NORETURN
+#define MYINLINE
+#define snprintf _snprintf
+#else
+#define ATTR_NORETURN __attribute((noreturn))
+#define MYINLINE inline
 #include <sys/mman.h>
+#endif
 
-static __attribute((noreturn)) void error(char *fmt, ...) {
+static ATTR_NORETURN void error(char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -175,7 +189,7 @@ static void gc(void *root);
 // Round up the given value to a multiple of size. Size must be a power of 2. It adds size - 1
 // first, then zero-ing the least significant bits to make the result a multiple of size. I know
 // these bit operations may look a little bit tricky, but it's efficient and thus frequently used.
-static inline size_t roundup(size_t var, size_t size) {
+static MYINLINE size_t roundup(size_t var, size_t size) {
     return (var + size - 1) & ~(size - 1);
 }
 
@@ -211,9 +225,9 @@ static Obj *alloc(void *root, int type, size_t size) {
         error("Memory exhausted");
 
     // Allocate the object.
-    Obj *obj = memory + mem_nused;
+    Obj *obj = (Obj *)((char *)memory + mem_nused);
     obj->type = type;
-    obj->size = size;
+    obj->size = (int)size;
     mem_nused += size;
     return obj;
 }
@@ -232,7 +246,7 @@ static Obj *scan2;
 
 // Moves one object from the from-space to the to-space. Returns the object's new address. If the
 // object has already been moved, does nothing but just returns the new address.
-static inline Obj *forward(Obj *obj) {
+static MYINLINE Obj *forward(Obj *obj) {
     // If the object's address is not in the from-space, the object is not managed by GC nor it
     // has already been moved to the to-space.
     ptrdiff_t offset = (uint8_t *)obj - (uint8_t *)from_space;
@@ -257,7 +271,11 @@ static inline Obj *forward(Obj *obj) {
 }
 
 static void *alloc_semispace() {
+#ifdef _WIN32
+    return malloc(MEMORY_SIZE);
+#else
     return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+#endif
 }
 
 // Copies the root objects.
@@ -316,7 +334,11 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
+#ifdef _WIN32
+    free(from_space);
+#else
     munmap(from_space, MEMORY_SIZE);
+#endif
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
