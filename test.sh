@@ -32,6 +32,8 @@ function run() {
 run integer 1 1
 run integer -1 -1
 run symbol a "'a"
+run symbol 213a "'213a"
+run symbol -213a "'-213a"
 run quote a "(quote a)"
 run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"

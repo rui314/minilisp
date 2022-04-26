@@ -463,22 +463,37 @@ static Obj *read_quote(void *root) {
     return *tmp;
 }
 
-static int read_number(int val) {
-    while (isdigit(peek()))
-        val = val * 10 + (getchar() - '0');
-    return val;
+static void append_to_symbol_buf(char *buf, int index) {
+    while (isalnum(peek()) || strchr(symbol_chars, peek())) {
+        if (SYMBOL_MAX_LEN <= index)
+            error("Symbol name too long");
+        buf[index++] = getchar();
+    }
+    buf[index] = '\0';
+}
+
+// Numbers followed by non delimiter characters return a symbol.
+static Obj *read_symbol_or_int(void *root, char c) {
+    char buf[SYMBOL_MAX_LEN + 1];
+    int index = 1;
+    buf[0] = c;
+    int non_digit_char;
+    while (isdigit(non_digit_char = peek())) 
+        buf[index++] = getchar();
+    if (isalpha(non_digit_char) || strchr(symbol_chars, non_digit_char)) {
+        append_to_symbol_buf(&buf[0],index);
+        return intern(root, buf);    
+    }
+    buf[index] = '\0';
+    int parsed_number = atoi(buf);
+    return make_int(root,parsed_number);
 }
 
 static Obj *read_symbol(void *root, char c) {
     char buf[SYMBOL_MAX_LEN + 1];
     buf[0] = c;
     int len = 1;
-    while (isalnum(peek()) || strchr(symbol_chars, peek())) {
-        if (SYMBOL_MAX_LEN <= len)
-            error("Symbol name too long");
-        buf[len++] = getchar();
-    }
-    buf[len] = '\0';
+    append_to_symbol_buf(&buf[0],len);
     return intern(root, buf);
 }
 
@@ -501,10 +516,9 @@ static Obj *read_expr(void *root) {
             return Dot;
         if (c == '\'')
             return read_quote(root);
-        if (isdigit(c))
-            return make_int(root, read_number(c - '0'));
-        if (c == '-' && isdigit(peek()))
-            return make_int(root, -read_number(0));
+        if (isdigit(c) || (c == '-' && isdigit(peek()))) {
+            return read_symbol_or_int(root, c);
+        }
         if (isalpha(c) || strchr(symbol_chars, c))
             return read_symbol(root, c);
         error("Don't know how to handle %c", c);
@@ -770,10 +784,10 @@ static Obj *prim_while(void *root, Obj **env, Obj **list) {
 
 // (gensym)
 static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
-  static int count = 0;
-  char buf[10];
-  snprintf(buf, sizeof(buf), "G__%d", count++);
-  return make_symbol(root, buf);
+    static int count = 0;
+    char buf[10];
+    snprintf(buf, sizeof(buf), "G__%d", count++);
+    return make_symbol(root, buf);
 }
 
 // (+ <integer> ...)
