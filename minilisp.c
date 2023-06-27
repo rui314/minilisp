@@ -50,7 +50,6 @@ struct Obj;
 
 typedef struct trampoline {
     struct trampoline (*f)(void *, struct Obj **, struct Obj **, struct Obj **);
-    void *root;
     struct Obj *arg1, *arg2, *arg3, *res;
 } trampoline;
 
@@ -569,7 +568,7 @@ static int length(Obj *list) {
 //======================================================================
 
 static trampoline make_result(Obj *p) {
-    return (trampoline){NULL, NULL, NULL, NULL, NULL, p};
+    return (trampoline){NULL, NULL, NULL, NULL, p};
 }
 
 static trampoline eval(void *root, Obj **env, Obj **obj, Obj **_);
@@ -622,7 +621,7 @@ static trampoline progn(void *root, Obj **env, Obj **list, Obj **_) {
         call_eval(root, env, r);
     }
     *r = (*lp)->car;
-    return (trampoline){eval, root, *env, *r, NULL, NULL};
+    return (trampoline){eval, *env, *r, NULL, NULL};
 }
 
 // Evaluates all the list elements and returns their return values as a new list.
@@ -647,7 +646,7 @@ static trampoline apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
     *newenv = (*fn)->env;
     *newenv = push_env(root, newenv, params, args);
     *body = (*fn)->body;
-    return (trampoline){progn, root, *newenv, *body, NULL, NULL};
+    return (trampoline){progn, *newenv, *body, NULL, NULL};
 }
 
 static Obj *call_apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
@@ -676,7 +675,7 @@ static trampoline apply(void *root, Obj **env, Obj **fn, Obj **args) {
     if ((*fn)->type == TFUNCTION) {
         DEFINE1(eargs);
         *eargs = eval_list(root, env, args);
-        return (trampoline){apply_func, root, *env, *fn, *eargs, NULL};
+        return (trampoline){apply_func, *env, *fn, *eargs, NULL};
     }
     error("not supported");
 }
@@ -734,7 +733,7 @@ static trampoline eval(void *root, Obj **env, Obj **obj, Obj **_) {
         *args = (*obj)->cdr;
         if ((*fn)->type != TPRIMITIVE && (*fn)->type != TFUNCTION)
             error("The head of a list must be a function");
-        return (trampoline){apply, root, *env, *fn, *args, NULL};
+        return (trampoline){apply, *env, *fn, *args, NULL};
     }
     default:
         error("Bug: eval: Unknown tag type: %d", (*obj)->type);
@@ -940,10 +939,10 @@ static trampoline prim_if(void *root, Obj **env, Obj **list) {
     *cond = call_eval(root, env, cond);
     if (*cond != Nil) {
         *then = (*list)->cdr->car;
-        return (trampoline){eval, root, *env, *then, NULL, NULL};
+        return (trampoline){eval, *env, *then, NULL, NULL};
     }
     *els = (*list)->cdr->cdr;
-    return *els == Nil ? make_result(Nil) : (trampoline){progn, root, *env, *els, NULL, NULL};
+    return *els == Nil ? make_result(Nil) : (trampoline){progn, *env, *els, NULL, NULL};
 }
 
 // (= <integer> <integer>)
