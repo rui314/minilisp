@@ -17,7 +17,7 @@ static __attribute((noreturn)) void error(char *fmt, ...) {
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
     va_end(ap);
-    exit(1);
+    abort();
 }
 
 //======================================================================
@@ -47,7 +47,14 @@ enum {
 
 // Typedef for the primitive function
 struct Obj;
-typedef struct Obj *Primitive(void *root, struct Obj **env, struct Obj **args);
+
+typedef struct trampoline {
+    struct trampoline (*f)(void *, struct Obj **, struct Obj **, struct Obj **);
+    void *root;
+    struct Obj *arg1, *arg2, *arg3, *res;
+} trampoline;
+
+typedef trampoline Primitive(void *root, struct Obj **env, struct Obj **args);
 
 // The object type
 typedef struct Obj {
@@ -561,7 +568,11 @@ static int length(Obj *list) {
 // Evaluator
 //======================================================================
 
-static Obj *eval(void *root, Obj **env, Obj **obj);
+static trampoline make_result(Obj *p) {
+    return (trampoline){NULL, NULL, NULL, NULL, NULL, p};
+}
+
+static trampoline eval(void *root, Obj **env, Obj **obj, Obj **_);
 
 static void add_variable(void *root, Obj **env, Obj **sym, Obj **val) {
     DEFINE2(vars, tmp);
@@ -586,14 +597,32 @@ static Obj *push_env(void *root, Obj **env, Obj **vars, Obj **vals) {
     return make_env(root, map, env);
 }
 
-// Evaluates the list elements from head and returns the last return value.
-static Obj *progn(void *root, Obj **env, Obj **list) {
-    DEFINE2(lp, r);
-    for (*lp = *list; *lp != Nil; *lp = (*lp)->cdr) {
-        *r = (*lp)->car;
-        *r = eval(root, env, r);
+static Obj *call_eval(void *root, Obj **env, Obj **obj) {
+    DEFINE4(arg1, arg2, arg3, res);
+    trampoline t = eval(root, env, obj, NULL);
+    *arg1 = t.arg1;
+    *arg2 = t.arg2;
+    *arg3 = t.arg3;
+    *res = t.res;
+    while (t.f) {
+        t = t.f(root, arg1, arg2, arg3);
+        *arg1 = t.arg1;
+        *arg2 = t.arg2;
+        *arg3 = t.arg3;
+        *res = t.res;
     }
-    return *r;
+    return t.res;
+}
+
+// Evaluates the list elements from head and returns the last return value.
+static trampoline progn(void *root, Obj **env, Obj **list, Obj **_) {
+    DEFINE2(lp, r);
+    for (*lp = *list; (*lp)->cdr != Nil; *lp = (*lp)->cdr) {
+        *r = (*lp)->car;
+        call_eval(root, env, r);
+    }
+    *r = (*lp)->car;
+    return (trampoline){eval, root, *env, *r, NULL, NULL};
 }
 
 // Evaluates all the list elements and returns their return values as a new list.
@@ -602,7 +631,7 @@ static Obj *eval_list(void *root, Obj **env, Obj **list) {
     *head = Nil;
     for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
         *expr = (*lp)->car;
-        *result = eval(root, env, expr);
+        *result = call_eval(root, env, expr);
         *head = cons(root, result, head);
     }
     return reverse(*head);
@@ -612,17 +641,34 @@ static bool is_list(Obj *obj) {
     return obj == Nil || obj->type == TCELL;
 }
 
-static Obj *apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
+static trampoline apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
     DEFINE3(params, newenv, body);
     *params = (*fn)->params;
     *newenv = (*fn)->env;
     *newenv = push_env(root, newenv, params, args);
     *body = (*fn)->body;
-    return progn(root, newenv, body);
+    return (trampoline){progn, root, *newenv, *body, NULL, NULL};
+}
+
+static Obj *call_apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
+    DEFINE4(arg1, arg2, arg3, res);
+    trampoline t = apply_func(root, env, fn, args);
+    *arg1 = t.arg1;
+    *arg2 = t.arg2;
+    *arg3 = t.arg3;
+    *res = t.res;
+    while (t.f) {
+        t = t.f(root, arg1, arg2, arg3);
+        *arg1 = t.arg1;
+        *arg2 = t.arg2;
+        *arg3 = t.arg3;
+        *res = t.res;
+    }
+    return t.res;
 }
 
 // Apply fn with args.
-static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
+static trampoline apply(void *root, Obj **env, Obj **fn, Obj **args) {
     if (!is_list(*args))
         error("argument must be a list");
     if ((*fn)->type == TPRIMITIVE)
@@ -630,7 +676,7 @@ static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
     if ((*fn)->type == TFUNCTION) {
         DEFINE1(eargs);
         *eargs = eval_list(root, env, args);
-        return apply_func(root, env, fn, eargs);
+        return (trampoline){apply_func, root, *env, *fn, *eargs, NULL};
     }
     error("not supported");
 }
@@ -657,11 +703,11 @@ static Obj *macroexpand(void *root, Obj **env, Obj **obj) {
         return *obj;
     *macro = (*bind)->cdr;
     *args = (*obj)->cdr;
-    return apply_func(root, env, macro, args);
+    return call_apply_func(root, env, macro, args);
 }
 
 // Evaluates the S expression.
-static Obj *eval(void *root, Obj **env, Obj **obj) {
+static trampoline eval(void *root, Obj **env, Obj **obj, Obj **_) {
     switch ((*obj)->type) {
     case TINT:
     case TPRIMITIVE:
@@ -669,26 +715,26 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
     case TTRUE:
     case TNIL:
         // Self-evaluating objects
-        return *obj;
+        return make_result(*obj);
     case TSYMBOL: {
         // Variable
         Obj *bind = find(env, *obj);
         if (!bind)
             error("Undefined symbol: %s", (*obj)->name);
-        return bind->cdr;
+        return make_result(bind->cdr);
     }
     case TCELL: {
         // Function application form
         DEFINE3(fn, expanded, args);
         *expanded = macroexpand(root, env, obj);
         if (*expanded != *obj)
-            return eval(root, env, expanded);
+            return make_result(call_eval(root, env, expanded));
         *fn = (*obj)->car;
-        *fn = eval(root, env, fn);
+        *fn = call_eval(root, env, fn);
         *args = (*obj)->cdr;
         if ((*fn)->type != TPRIMITIVE && (*fn)->type != TFUNCTION)
             error("The head of a list must be a function");
-        return apply(root, env, fn, args);
+        return (trampoline){apply, root, *env, *fn, *args, NULL};
     }
     default:
         error("Bug: eval: Unknown tag type: %d", (*obj)->type);
@@ -700,39 +746,39 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
 //======================================================================
 
 // 'expr
-static Obj *prim_quote(void *root, Obj **env, Obj **list) {
+static trampoline prim_quote(void *root, Obj **env, Obj **list) {
     if (length(*list) != 1)
         error("Malformed quote");
-    return (*list)->car;
+    return make_result((*list)->car);
 }
 
 // (cons expr expr)
-static Obj *prim_cons(void *root, Obj **env, Obj **list) {
+static trampoline prim_cons(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2)
         error("Malformed cons");
     Obj *cell = eval_list(root, env, list);
     cell->cdr = cell->cdr->car;
-    return cell;
+    return make_result(cell);
 }
 
 // (car <cell>)
-static Obj *prim_car(void *root, Obj **env, Obj **list) {
+static trampoline prim_car(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     if (args->car->type != TCELL || args->cdr != Nil)
         error("Malformed car");
-    return args->car->car;
+    return make_result(args->car->car);
 }
 
 // (cdr <cell>)
-static Obj *prim_cdr(void *root, Obj **env, Obj **list) {
+static trampoline prim_cdr(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     if (args->car->type != TCELL || args->cdr != Nil)
         error("Malformed cdr");
-    return args->car->cdr;
+    return make_result(args->car->cdr);
 }
 
 // (setq <symbol> expr)
-static Obj *prim_setq(void *root, Obj **env, Obj **list) {
+static trampoline prim_setq(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed setq");
     DEFINE2(bind, value);
@@ -740,69 +786,70 @@ static Obj *prim_setq(void *root, Obj **env, Obj **list) {
     if (!*bind)
         error("Unbound variable %s", (*list)->car->name);
     *value = (*list)->cdr->car;
-    *value = eval(root, env, value);
+    *value = call_eval(root, env, value);
     (*bind)->cdr = *value;
-    return *value;
+    return make_result(*value);
 }
 
 // (setcar <cell> expr)
-static Obj *prim_setcar(void *root, Obj **env, Obj **list) {
+static trampoline prim_setcar(void *root, Obj **env, Obj **list) {
     DEFINE1(args);
     *args = eval_list(root, env, list);
     if (length(*args) != 2 || (*args)->car->type != TCELL)
         error("Malformed setcar");
     (*args)->car->car = (*args)->cdr->car;
-    return (*args)->car;
+    return make_result((*args)->car);
 }
 
 // (while cond expr ...)
-static Obj *prim_while(void *root, Obj **env, Obj **list) {
+static trampoline prim_while(void *root, Obj **env, Obj **list) {
     if (length(*list) < 2)
         error("Malformed while");
     DEFINE2(cond, exprs);
     *cond = (*list)->car;
-    while (eval(root, env, cond) != Nil) {
+    while (call_eval(root, env, cond) != Nil) {
         *exprs = (*list)->cdr;
         eval_list(root, env, exprs);
     }
-    return Nil;
+    return make_result(Nil);
 }
 
 // (gensym)
-static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
-  static int count = 0;
-  char buf[10];
-  snprintf(buf, sizeof(buf), "G__%d", count++);
-  return make_symbol(root, buf);
+static trampoline prim_gensym(void *root, Obj **env, Obj **list) {
+    static int count = 0;
+    char buf[10];
+    snprintf(buf, sizeof(buf), "G__%d", count++);
+    return make_result(make_symbol(root, buf));
 }
 
 // (+ <integer> ...)
-static Obj *prim_plus(void *root, Obj **env, Obj **list) {
+static trampoline prim_plus(void *root, Obj **env, Obj **list) {
     int sum = 0;
     for (Obj *args = eval_list(root, env, list); args != Nil; args = args->cdr) {
         if (args->car->type != TINT)
             error("+ takes only numbers");
         sum += args->car->value;
     }
-    return make_int(root, sum);
+    return make_result(make_int(root, sum));
 }
 
 // (- <integer> ...)
-static Obj *prim_minus(void *root, Obj **env, Obj **list) {
+static trampoline prim_minus(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     for (Obj *p = args; p != Nil; p = p->cdr)
         if (p->car->type != TINT)
             error("- takes only numbers");
+    if (args == Nil) error("- takes at least 1 argument");
     if (args->cdr == Nil)
-        return make_int(root, -args->car->value);
+        return make_result(make_int(root, -args->car->value));
     int r = args->car->value;
     for (Obj *p = args->cdr; p != Nil; p = p->cdr)
         r -= p->car->value;
-    return make_int(root, r);
+    return make_result(make_int(root, r));
 }
 
 // (< <integer> <integer>)
-static Obj *prim_lt(void *root, Obj **env, Obj **list) {
+static trampoline prim_lt(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     if (length(args) != 2)
         error("malformed <");
@@ -810,7 +857,7 @@ static Obj *prim_lt(void *root, Obj **env, Obj **list) {
     Obj *y = args->cdr->car;
     if (x->type != TINT || y->type != TINT)
         error("< takes only numbers");
-    return x->value < y->value ? True : Nil;
+    return make_result(x->value < y->value ? True : Nil);
 }
 
 static Obj *handle_function(void *root, Obj **env, Obj **list, int type) {
@@ -829,8 +876,8 @@ static Obj *handle_function(void *root, Obj **env, Obj **list, int type) {
 }
 
 // (lambda (<symbol> ...) expr ...)
-static Obj *prim_lambda(void *root, Obj **env, Obj **list) {
-    return handle_function(root, env, list, TFUNCTION);
+static trampoline prim_lambda(void *root, Obj **env, Obj **list) {
+    return make_result(handle_function(root, env, list, TFUNCTION));
 }
 
 static Obj *handle_defun(void *root, Obj **env, Obj **list, int type) {
@@ -845,62 +892,62 @@ static Obj *handle_defun(void *root, Obj **env, Obj **list, int type) {
 }
 
 // (defun <symbol> (<symbol> ...) expr ...)
-static Obj *prim_defun(void *root, Obj **env, Obj **list) {
-    return handle_defun(root, env, list, TFUNCTION);
+static trampoline prim_defun(void *root, Obj **env, Obj **list) {
+    return make_result(handle_defun(root, env, list, TFUNCTION));
 }
 
 // (define <symbol> expr)
-static Obj *prim_define(void *root, Obj **env, Obj **list) {
+static trampoline prim_define(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2 || (*list)->car->type != TSYMBOL)
         error("Malformed define");
     DEFINE2(sym, value);
     *sym = (*list)->car;
     *value = (*list)->cdr->car;
-    *value = eval(root, env, value);
+    *value = call_eval(root, env, value);
     add_variable(root, env, sym, value);
-    return *value;
+    return make_result(*value);
 }
 
 // (defmacro <symbol> (<symbol> ...) expr ...)
-static Obj *prim_defmacro(void *root, Obj **env, Obj **list) {
-    return handle_defun(root, env, list, TMACRO);
+static trampoline prim_defmacro(void *root, Obj **env, Obj **list) {
+    return make_result(handle_defun(root, env, list, TMACRO));
 }
 
 // (macroexpand expr)
-static Obj *prim_macroexpand(void *root, Obj **env, Obj **list) {
+static trampoline prim_macroexpand(void *root, Obj **env, Obj **list) {
     if (length(*list) != 1)
         error("Malformed macroexpand");
     DEFINE1(body);
     *body = (*list)->car;
-    return macroexpand(root, env, body);
+    return make_result(macroexpand(root, env, body));
 }
 
 // (println expr)
-static Obj *prim_println(void *root, Obj **env, Obj **list) {
+static trampoline prim_println(void *root, Obj **env, Obj **list) {
     DEFINE1(tmp);
     *tmp = (*list)->car;
-    print(eval(root, env, tmp));
+    print(call_eval(root, env, tmp));
     printf("\n");
-    return Nil;
+    return make_result(Nil);
 }
 
 // (if expr expr expr ...)
-static Obj *prim_if(void *root, Obj **env, Obj **list) {
+static trampoline prim_if(void *root, Obj **env, Obj **list) {
     if (length(*list) < 2)
         error("Malformed if");
     DEFINE3(cond, then, els);
     *cond = (*list)->car;
-    *cond = eval(root, env, cond);
+    *cond = call_eval(root, env, cond);
     if (*cond != Nil) {
         *then = (*list)->cdr->car;
-        return eval(root, env, then);
+        return (trampoline){eval, root, *env, *then, NULL, NULL};
     }
     *els = (*list)->cdr->cdr;
-    return *els == Nil ? Nil : progn(root, env, els);
+    return *els == Nil ? make_result(Nil) : (trampoline){progn, root, *env, *els, NULL, NULL};
 }
 
 // (= <integer> <integer>)
-static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
+static trampoline prim_num_eq(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2)
         error("Malformed =");
     Obj *values = eval_list(root, env, list);
@@ -908,15 +955,15 @@ static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
     Obj *y = values->cdr->car;
     if (x->type != TINT || y->type != TINT)
         error("= only takes numbers");
-    return x->value == y->value ? True : Nil;
+    return make_result(x->value == y->value ? True : Nil);
 }
 
 // (eq expr expr)
-static Obj *prim_eq(void *root, Obj **env, Obj **list) {
+static trampoline prim_eq(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2)
         error("Malformed eq");
     Obj *values = eval_list(root, env, list);
-    return values->car == values->cdr->car ? True : Nil;
+    return make_result(values->car == values->cdr->car ? True : Nil);
 }
 
 static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
@@ -990,7 +1037,7 @@ int main(int argc, char **argv) {
             error("Stray close parenthesis");
         if (*expr == Dot)
             error("Stray dot");
-        print(eval(root, env, expr));
+        print(call_eval(root, env, expr));
         printf("\n");
     }
 }
