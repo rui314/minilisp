@@ -28,6 +28,13 @@ function run() {
   echo ok
 }
 
+function run_fast() {
+  echo -n "Testing $1 ... "
+  # Run the tests twice to test the garbage collector with different settings.
+  MINILISP_ALWAYS_GC= do_run "$@"
+  echo ok
+}
+
 # Basic data types
 run integer 1 1
 run integer -1 -1
@@ -36,6 +43,7 @@ run quote a "(quote a)"
 run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
 
+run + 0 '(+)'
 run + 3 '(+ 1 2)'
 run + -2 '(+ 1 -3)'
 
@@ -145,3 +153,5 @@ run macroexpand '(if (= x 0) (print x))' "
 
 # Sum from 0 to 10
 run recursion 55 '(defun f (x) (if (= x 0) 0 (+ (f (+ x -1)) x))) (f 10)'
+
+run_fast tco 0 '(defun f (x) (if (= x 0) 0 (f (- x 1)))) (f 1000000)'

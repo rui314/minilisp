@@ -1,7 +1,7 @@
 MiniLisp
 ========
 
-One day I wanted to see what I can do with 1k lines of C and
+One day I wanted to see what I can do with about 1k lines of C and
 decided to write a Lisp interpreter. That turned to be a
 fun weekend project, and the outcome is a mini lisp implementation
 that supports
@@ -13,10 +13,11 @@ that supports
 - _if_ conditional,
 - primitive functions, such as +, =, <, or _list_,
 - user-defined functions,
+- tail call optimization,
 - a macro system,
 - and a copying garbage collector.
 
-All those in 1000 lines of C. I didn't sacrifice readability for size.
+All those in around 1000 lines of C. I didn't sacrifice readability for size.
 The code is in my opinion heavily commented to help the reader understand
 how all these features work.
 
@@ -125,12 +126,8 @@ evaluates *cond*. If the result is a true value, *then* is evaluated. Otherwise
 ### Loops
 
 `(while cond expr ...)` executes `expr ...` until `cond` is evaluated to
-`()`. This is the only loop supported by MiniLisp.
-
-If you are familiar with Scheme, you might be wondering if you could write a
-loop by tail recursion in MiniLisp. The answer is no. Tail calls consume stack
-space in MiniLisp, so a loop written as recursion will fail with the memory
-exhaustion error.
+`()`. This is the only loop supported by MiniLisp, apart from those
+constructed from tail calls.
 
 ### Equivalence test operators
 
