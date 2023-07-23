@@ -8,4 +8,4 @@ elif command -v zig > /dev/null 2>&1; then
   CC='zig cc'
 fi
 
-$CC -s -Os -Wall -o minilisp minilisp.c
+$CC -std=gnu99 -g -O2 -Wall -o minilisp minilisp.c
