@@ -364,7 +364,7 @@ static Obj *make_function(void *root, Obj **env, int type, Obj **params, Obj **b
     return r;
 }
 
-struct Obj *make_env(void *root, Obj **vars, Obj **up) {
+static Obj *make_env(void *root, Obj **vars, Obj **up) {
     Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
     r->vars = *vars;
     r->up = *up;
@@ -385,7 +385,7 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 //======================================================================
 
 #define SYMBOL_MAX_LEN 200
-const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
+static const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
 
 static Obj *read_expr(void *root);
 
