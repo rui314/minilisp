@@ -23,19 +23,19 @@ how all these features work.
 Compile
 -------
 
-    $ make
+    $ ./build.sh
 
-MiniLisp has been tested on Linux x86/x86-64 and 64 bit Mac OS. The code is not
+MiniLisp has been tested on 64 bit Mac OS and Windows/MinGW. The code is not
 very architecture dependent, so you should be able to compile and run on other
 Unix-like operating systems.
 
 Test
 ----
 
-MiniLisp comes with a comprehensive test suite. In order to run the tests, give
-"test" argument to make.
+MiniLisp comes with a comprehensive test suite. In order to run the tests,
+invoke following command.
 
-    $ make test
+    $ ./test.sh
 
 Language features
 -----------------
