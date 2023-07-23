@@ -111,6 +111,9 @@ static void *memory;
 // The pointer pointing to the beginning of the old heap
 static void *from_space;
 
+// The pointer pointing to the beginning of the new heap
+static void *to_space;
+
 // The number of bytes allocated from the heap
 static size_t mem_nused = 0;
 
@@ -274,9 +277,9 @@ static void gc(void *root) {
     assert(!gc_running);
     gc_running = true;
 
-    // Allocate a new semi-space.
+    // Swap semi-spaces.
     from_space = memory;
-    memory = alloc_semispace();
+    memory = to_space;
 
     // Initialize the two pointers for GC. Initially they point to the beginning of the to-space.
     scan1 = scan2 = memory;
@@ -315,7 +318,7 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
-    free(from_space);
+    to_space = from_space;
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
@@ -971,6 +974,7 @@ int main(int argc, char **argv) {
 
     // Memory allocation
     memory = alloc_semispace();
+    to_space = alloc_semispace();
 
     // Constants and primitives
     Symbols = Nil;
