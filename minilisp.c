@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 static __attribute((noreturn)) void error(char *fmt, ...) {
     va_list ap;
@@ -256,7 +257,7 @@ static inline Obj *forward(Obj *obj) {
 }
 
 static void *alloc_semispace() {
-    return malloc(MEMORY_SIZE);
+    return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 }
 
 // Copies the root objects.
@@ -315,7 +316,7 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
-    free(from_space);
+    munmap(from_space, MEMORY_SIZE);
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
