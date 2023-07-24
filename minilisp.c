@@ -9,7 +9,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
+#ifdef _WIN32
+# include <memoryapi.h>
+#else
+# include <sys/mman.h>
+#endif
 
 static __attribute((noreturn)) void error(char *fmt, ...) {
     va_list ap;
@@ -257,7 +261,11 @@ static inline Obj *forward(Obj *obj) {
 }
 
 static void *alloc_semispace() {
+#ifdef _WIN32
+    return VirtualAlloc(NULL, MEMORY_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#else
     return mmap(NULL, MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+#endif
 }
 
 // Copies the root objects.
@@ -316,7 +324,11 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
+#ifdef _WIN32
+    VirtualFree(from_space, 0, MEM_RELEASE);
+#else
     munmap(from_space, MEMORY_SIZE);
+#endif
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
