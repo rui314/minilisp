@@ -268,6 +268,14 @@ static void *alloc_semispace() {
 #endif
 }
 
+static void free_semispace() {
+#ifdef _WIN32
+    VirtualFree(from_space, 0, MEM_RELEASE);
+#else
+    munmap(from_space, MEMORY_SIZE);
+#endif
+}
+
 // Copies the root objects.
 static void forward_root_objects(void *root) {
     Symbols = forward(Symbols);
@@ -324,11 +332,7 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
-#ifdef _WIN32
-    VirtualFree(from_space, 0, MEM_RELEASE);
-#else
-    munmap(from_space, MEMORY_SIZE);
-#endif
+    free_semispace();
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
