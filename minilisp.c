@@ -268,11 +268,11 @@ static void *alloc_semispace() {
 #endif
 }
 
-static void free_semispace() {
+static void free_semispace(void *addr) {
 #ifdef _WIN32
-    VirtualFree(from_space, 0, MEM_RELEASE);
+    VirtualFree(addr, 0, MEM_RELEASE);
 #else
-    munmap(from_space, MEMORY_SIZE);
+    munmap(addr, MEMORY_SIZE);
 #endif
 }
 
@@ -332,7 +332,7 @@ static void gc(void *root) {
     }
 
     // Finish up GC.
-    free_semispace();
+    free_semispace(from_space);
     size_t old_nused = mem_nused;
     mem_nused = (size_t)((uint8_t *)scan1 - (uint8_t *)memory);
     if (debug_gc)
