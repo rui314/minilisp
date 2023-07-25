@@ -31,7 +31,7 @@ static __attribute((noreturn)) void error(char *fmt, ...) {
 // The Lisp object type
 enum {
     // Regular objects visible from the user
-    TINT = 1,
+    TNUMBER = 1,
     TCELL,
     TSYMBOL,
     TPRIMITIVE,
@@ -65,8 +65,8 @@ typedef struct Obj {
 
     // Object values.
     union {
-        // Int
-        int value;
+        // Number
+        double value;
         // Cell
         struct {
             struct Obj *car;
@@ -306,7 +306,7 @@ static void gc(void *root) {
     // the to-space.
     while (scan1 < scan2) {
         switch (scan1->type) {
-        case TINT:
+        case TNUMBER:
         case TSYMBOL:
         case TPRIMITIVE:
             // Any of the above types does not contain a pointer to a GC-managed object.
@@ -344,8 +344,8 @@ static void gc(void *root) {
 // Constructors
 //======================================================================
 
-static Obj *make_int(void *root, int value) {
-    Obj *r = alloc(root, TINT, sizeof(int));
+static Obj *make_number(void *root, double value) {
+    Obj *r = alloc(root, TNUMBER, sizeof(double));
     r->value = value;
     return r;
 }
@@ -518,9 +518,9 @@ static Obj *read_expr(void *root) {
         if (c == '\'')
             return read_quote(root);
         if (isdigit(c))
-            return make_int(root, read_number(c - '0'));
+            return make_number(root, read_number(c - '0'));
         if (c == '-' && isdigit(peek()))
-            return make_int(root, -read_number(0));
+            return make_number(root, -read_number(0));
         if (isalpha(c) || strchr(symbol_chars, c))
             return read_symbol(root, c);
         error("Don't know how to handle %c", c);
@@ -551,7 +551,7 @@ static void print(Obj *obj) {
     case type:                                  \
         printf(__VA_ARGS__);                    \
         return
-    CASE(TINT, "%d", obj->value);
+    CASE(TNUMBER, "%.17g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
@@ -679,7 +679,7 @@ static Obj *macroexpand(void *root, Obj **env, Obj **obj) {
 // Evaluates the S expression.
 static Obj *eval(void *root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
-    case TINT:
+    case TNUMBER:
     case TPRIMITIVE:
     case TFUNCTION:
     case TTRUE:
@@ -792,39 +792,39 @@ static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
   return make_symbol(root, buf);
 }
 
-// (+ <integer> ...)
+// (+ <number> ...)
 static Obj *prim_plus(void *root, Obj **env, Obj **list) {
-    int sum = 0;
+    double sum = 0;
     for (Obj *args = eval_list(root, env, list); args != Nil; args = args->cdr) {
-        if (args->car->type != TINT)
+        if (args->car->type != TNUMBER)
             error("+ takes only numbers");
         sum += args->car->value;
     }
-    return make_int(root, sum);
+    return make_number(root, sum);
 }
 
-// (- <integer> ...)
+// (- <number> ...)
 static Obj *prim_minus(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     for (Obj *p = args; p != Nil; p = p->cdr)
-        if (p->car->type != TINT)
+        if (p->car->type != TNUMBER)
             error("- takes only numbers");
     if (args->cdr == Nil)
-        return make_int(root, -args->car->value);
-    int r = args->car->value;
+        return make_number(root, -args->car->value);
+    double r = args->car->value;
     for (Obj *p = args->cdr; p != Nil; p = p->cdr)
         r -= p->car->value;
-    return make_int(root, r);
+    return make_number(root, r);
 }
 
-// (< <integer> <integer>)
+// (< <number> <number>)
 static Obj *prim_lt(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
     if (length(args) != 2)
         error("malformed <");
     Obj *x = args->car;
     Obj *y = args->cdr->car;
-    if (x->type != TINT || y->type != TINT)
+    if (x->type != TNUMBER || y->type != TNUMBER)
         error("< takes only numbers");
     return x->value < y->value ? True : Nil;
 }
@@ -915,14 +915,14 @@ static Obj *prim_if(void *root, Obj **env, Obj **list) {
     return *els == Nil ? Nil : progn(root, env, els);
 }
 
-// (= <integer> <integer>)
+// (= <number> <number>)
 static Obj *prim_num_eq(void *root, Obj **env, Obj **list) {
     if (length(*list) != 2)
         error("Malformed =");
     Obj *values = eval_list(root, env, list);
     Obj *x = values->car;
     Obj *y = values->cdr->car;
-    if (x->type != TINT || y->type != TINT)
+    if (x->type != TNUMBER || y->type != TNUMBER)
         error("= only takes numbers");
     return x->value == y->value ? True : Nil;
 }
