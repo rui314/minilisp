@@ -29,8 +29,8 @@ function run() {
 }
 
 # Basic data types
-run integer 1 1
-run integer -1 -1
+run number 1 1
+run number -1 -1
 run symbol a "'a"
 run quote a "(quote a)"
 run quote 63 "'63"
