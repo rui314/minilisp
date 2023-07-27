@@ -29,8 +29,10 @@ function run() {
 }
 
 # Basic data types
-run number 1 1
-run number -1 -1
+run integer 1 1
+run integer -1 -1
+run flonum 0.1 0.1
+run flonum 0.625 0.625
 run symbol a "'a"
 run quote a "(quote a)"
 run quote 63 "'63"
