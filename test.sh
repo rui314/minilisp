@@ -40,6 +40,7 @@ run quote '(+ 1 2)' "'(+ 1 2)"
 
 run + 3 '(+ 1 2)'
 run + -2 '(+ 1 -3)'
+run flonum+ -1.9 '(+ 1.1 -3)'
 
 run 'unary -' -3 '(- 3)'
 run '-' -2 '(- 3 5)'
@@ -48,6 +49,7 @@ run '-' -9 '(- 3 5 7)'
 run '<' t '(< 2 3)'
 run '<' '()' '(< 3 3)'
 run '<' '()' '(< 4 3)'
+run 'flonum<' '()' '(< 4.00001 4.0)'
 
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
@@ -85,6 +87,8 @@ run if c "(if () 'a 'b 'c)"
 # Numeric comparisons
 run = t '(= 3 3)'
 run = '()' '(= 3 2)'
+run flonum= t '(= 0.1 0.1)'
+run flonum= '()' '(= 1.2 (+ 1.1 0.1))'
 
 # eq
 run eq t "(eq 'foo 'foo)"
