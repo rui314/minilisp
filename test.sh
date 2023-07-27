@@ -32,7 +32,7 @@ function run() {
 run integer 1 1
 run integer -1 -1
 run flonum 0.1 0.1
-run flonum 0.625 0.625
+run flonum 0.625625 0.625625
 run symbol a "'a"
 run quote a "(quote a)"
 run quote 63 "'63"
@@ -49,7 +49,8 @@ run '-' -9 '(- 3 5 7)'
 run '<' t '(< 2 3)'
 run '<' '()' '(< 3 3)'
 run '<' '()' '(< 4 3)'
-run 'flonum<' '()' '(< 4.00001 4.0)'
+run 'flonum<' t '(< 2.001 2.002)'
+run 'flonum<' '()' '(< 4.001 4.000)'
 
 run 'literal list' '(a b c)' "'(a b c)"
 run 'literal list' '(a b . c)' "'(a b . c)"
