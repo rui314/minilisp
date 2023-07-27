@@ -479,10 +479,15 @@ static Obj *read_quote(void *root) {
     return *tmp;
 }
 
-static int read_number(int val) {
+static double read_number(double val) {
+    double power = 1;
     while (isdigit(peek()))
         val = val * 10 + (getchar() - '0');
-    return val;
+    if (peek() == '.')
+        getchar();
+    for (; isdigit(peek()); power *= 10)
+        val = val * 10 + (getchar() - '0');
+    return val / power;
 }
 
 static Obj *read_symbol(void *root, char c) {
@@ -551,7 +556,7 @@ static void print(Obj *obj) {
     case type:                                  \
         printf(__VA_ARGS__);                    \
         return
-    CASE(TNUMBER, "%.17g", obj->value);
+    CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
