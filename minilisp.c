@@ -408,10 +408,10 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 // This is a hand-written recursive-descendent parser.
 //======================================================================
 
+#define STRING_MAX_LEN 200
+
 #define SYMBOL_MAX_LEN 200
 static const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
-
-#define STRING_MAX_LEN 200
 
 static Obj *read_expr(void *root);
 
