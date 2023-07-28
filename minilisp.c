@@ -35,6 +35,7 @@ enum {
     TCELL,
     TSYMBOL,
     TSTRING,
+    TPOINTER,
     TPRIMITIVE,
     TFUNCTION,
     TMACRO,
@@ -77,6 +78,8 @@ typedef struct Obj {
         char name[1];
         // String
         char str[1];
+        // Pointer
+        void *ptr;
         // Primitive
         Primitive *fn;
         // Function or Macro
@@ -312,6 +315,7 @@ static void gc(void *root) {
         case TNUMBER:
         case TSYMBOL:
         case TSTRING:
+        case TPOINTER:
         case TPRIMITIVE:
             // Any of the above types does not contain a pointer to a GC-managed object.
             break;
@@ -370,6 +374,12 @@ static Obj *make_symbol(void *root, char *name) {
 static Obj *make_string(void *root, char *str) {
     Obj *r = alloc(root, TSTRING, strlen(str) + 1);
     strcpy(r->str, str);
+    return r;
+}
+
+static Obj *make_pointer(void *root, void *ptr) {
+    Obj *r = alloc(root, TPOINTER, sizeof(void *));
+    r->ptr = ptr;
     return r;
 }
 
@@ -593,6 +603,7 @@ static void print(Obj *obj) {
     CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
     CASE(TSTRING, "\"%s\"", obj->str);
+    CASE(TPOINTER, "%p", obj->ptr);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
@@ -721,6 +732,7 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
     case TNUMBER:
     case TSTRING:
+    case TPOINTER:
     case TPRIMITIVE:
     case TFUNCTION:
     case TTRUE:
