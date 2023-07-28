@@ -498,6 +498,14 @@ static Obj *read_string(void *root) {
     while ((c = getchar()) != '"') {
         if (STRING_MAX_LEN <= len)
             error("String too long");
+        if (c == '\\') {
+            c = getchar();
+            switch (c) {
+            case 'r': c = '\r'; break;
+            case 'n': c = '\n'; break;
+            case '\"': c = '"'; break;
+            }
+        }
         buf[len++] = c;
     }
     buf[len] = '\0';
