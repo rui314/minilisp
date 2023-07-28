@@ -411,6 +411,8 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 #define SYMBOL_MAX_LEN 200
 static const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
 
+#define STRING_MAX_LEN 512
+
 static Obj *read_expr(void *root);
 
 static int peek(void) {
