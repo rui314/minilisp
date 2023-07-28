@@ -501,8 +501,8 @@ static Obj *read_string(void *root) {
         if (c == '\\') {
             c = getchar();
             switch (c) {
-            case 'r': c = '\r'; break;
             case 'n': c = '\n'; break;
+            case 'r': c = '\r'; break;
             }
         }
         buf[len++] = c;
