@@ -100,6 +100,7 @@ typedef struct Obj {
 } Obj;
 
 // Constants
+static Obj *Null = &(Obj){ TPOINTER };
 static Obj *True = &(Obj){ TTRUE };
 static Obj *Nil = &(Obj){ TNIL };
 static Obj *Dot = &(Obj){ TDOT };
@@ -1009,6 +1010,8 @@ static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
 
 static void define_constants(void *root, Obj **env) {
     DEFINE1(sym);
+    *sym = intern(root, "NULL");
+    add_variable(root, env, sym, &Null);
     *sym = intern(root, "t");
     add_variable(root, env, sym, &True);
 }
