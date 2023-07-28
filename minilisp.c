@@ -503,7 +503,6 @@ static Obj *read_string(void *root) {
             switch (c) {
             case 'r': c = '\r'; break;
             case 'n': c = '\n'; break;
-            case '\"': c = '"'; break;
             }
         }
         buf[len++] = c;
