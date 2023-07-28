@@ -35,6 +35,7 @@ enum {
     TCELL,
     TSYMBOL,
     TSTRING,
+    TPOINTER,
     TPRIMITIVE,
     TFUNCTION,
     TMACRO,
@@ -77,6 +78,8 @@ typedef struct Obj {
         char name[1];
         // String
         char str[1];
+        // Pointer
+        void *ptr;
         // Primitive
         Primitive *fn;
         // Function or Macro
@@ -97,6 +100,7 @@ typedef struct Obj {
 } Obj;
 
 // Constants
+static Obj *Null = &(Obj){ TPOINTER };
 static Obj *True = &(Obj){ TTRUE };
 static Obj *Nil = &(Obj){ TNIL };
 static Obj *Dot = &(Obj){ TDOT };
@@ -312,6 +316,7 @@ static void gc(void *root) {
         case TNUMBER:
         case TSYMBOL:
         case TSTRING:
+        case TPOINTER:
         case TPRIMITIVE:
             // Any of the above types does not contain a pointer to a GC-managed object.
             break;
@@ -370,6 +375,12 @@ static Obj *make_symbol(void *root, char *name) {
 static Obj *make_string(void *root, char *str) {
     Obj *r = alloc(root, TSTRING, strlen(str) + 1);
     strcpy(r->str, str);
+    return r;
+}
+
+static Obj *make_pointer(void *root, void *ptr) {
+    Obj *r = alloc(root, TPOINTER, sizeof(void *));
+    r->ptr = ptr;
     return r;
 }
 
@@ -593,6 +604,7 @@ static void print(Obj *obj) {
     CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
     CASE(TSTRING, "\"%s\"", obj->str);
+    CASE(TPOINTER, "%p", obj->ptr);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
@@ -721,6 +733,7 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
     case TNUMBER:
     case TSTRING:
+    case TPOINTER:
     case TPRIMITIVE:
     case TFUNCTION:
     case TTRUE:
@@ -976,6 +989,18 @@ static Obj *prim_eq(void *root, Obj **env, Obj **list) {
     return values->car == values->cdr->car ? True : Nil;
 }
 
+// (fopen <string> <string>)
+static Obj *prim_fopen(void *root, Obj **env, Obj **list) {
+    if (length(*list) != 2)
+        error("Malformed fopen");
+    Obj *args = eval_list(root, env, list);
+    Obj *path = args->car;
+    Obj *mode = args->cdr->car;
+    if (path->type != TSTRING || mode->type != TSTRING)
+        error("Parameters must be strings");
+    return make_pointer(root, fopen(path->str, mode->str));
+}
+
 static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
     DEFINE2(sym, prim);
     *sym = intern(root, name);
@@ -985,6 +1010,8 @@ static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
 
 static void define_constants(void *root, Obj **env) {
     DEFINE1(sym);
+    *sym = intern(root, "NULL");
+    add_variable(root, env, sym, &Null);
     *sym = intern(root, "t");
     add_variable(root, env, sym, &True);
 }
@@ -1010,6 +1037,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "=", prim_num_eq);
     add_primitive(root, env, "eq", prim_eq);
     add_primitive(root, env, "println", prim_println);
+    add_primitive(root, env, "fopen", prim_fopen);
 }
 
 //======================================================================
