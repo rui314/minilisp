@@ -585,7 +585,7 @@ static void print(Obj *obj) {
         return
     CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
-    CASE(TSTRING, "%s", obj->str);
+    CASE(TSTRING, "\"%s\"", obj->str);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
