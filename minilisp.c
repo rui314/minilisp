@@ -367,6 +367,12 @@ static Obj *make_symbol(void *root, char *name) {
     return sym;
 }
 
+static Obj *make_string(void *root, char *str) {
+    Obj *r = alloc(root, TSTRING, strlen(str) + 1);
+    strcpy(r->str, str);
+    return r;
+}
+
 static Obj *make_primitive(void *root, Primitive *fn) {
     Obj *r = alloc(root, TPRIMITIVE, sizeof(Primitive *));
     r->fn = fn;
