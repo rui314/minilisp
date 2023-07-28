@@ -34,6 +34,7 @@ enum {
     TNUMBER = 1,
     TCELL,
     TSYMBOL,
+    TSTRING,
     TPRIMITIVE,
     TFUNCTION,
     TMACRO,
@@ -74,6 +75,8 @@ typedef struct Obj {
         };
         // Symbol
         char name[1];
+        // String
+        char str[1];
         // Primitive
         Primitive *fn;
         // Function or Macro
@@ -308,6 +311,7 @@ static void gc(void *root) {
         switch (scan1->type) {
         case TNUMBER:
         case TSYMBOL:
+        case TSTRING:
         case TPRIMITIVE:
             // Any of the above types does not contain a pointer to a GC-managed object.
             break;
@@ -558,6 +562,7 @@ static void print(Obj *obj) {
         return
     CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
+    CASE(TSTRING, "%s", obj->str);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
@@ -685,6 +690,7 @@ static Obj *macroexpand(void *root, Obj **env, Obj **obj) {
 static Obj *eval(void *root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
     case TNUMBER:
+    case TSTRING:
     case TPRIMITIVE:
     case TFUNCTION:
     case TTRUE:
