@@ -988,6 +988,18 @@ static Obj *prim_eq(void *root, Obj **env, Obj **list) {
     return values->car == values->cdr->car ? True : Nil;
 }
 
+// (fopen <string> <string>)
+static Obj *prim_fopen(void *root, Obj **env, Obj **list) {
+    if (length(*list) != 2)
+        error("Malformed fopen");
+    Obj *args = eval_list(root, env, list);
+    Obj *path = args->car;
+    Obj *mode = args->cdr->car;
+    if (path->type != TSTRING || mode->type != TSTRING)
+        error("fopen only takes strings");
+    return make_pointer(root, fopen(path->str, mode->str));
+}
+
 static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
     DEFINE2(sym, prim);
     *sym = intern(root, name);
@@ -1022,6 +1034,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "=", prim_num_eq);
     add_primitive(root, env, "eq", prim_eq);
     add_primitive(root, env, "println", prim_println);
+    add_primitive(root, env, "fopen", prim_fopen);
 }
 
 //======================================================================
