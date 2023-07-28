@@ -491,6 +491,19 @@ static Obj *read_quote(void *root) {
     return *tmp;
 }
 
+static Obj *read_string(void *root) {
+    char buf[STRING_MAX_LEN + 1];
+    int len = 0;
+    while (peek() != '"') {
+        if (STRING_MAX_LEN <= len)
+            error("String too long");
+        buf[len++] = getchar();
+    }
+    getchar();
+    buf[len] = '\0';
+    return make_string(root, buf);
+}
+
 static double read_number(double val) {
     double power = 1;
     while (isdigit(peek()))
@@ -534,6 +547,8 @@ static Obj *read_expr(void *root) {
             return Dot;
         if (c == '\'')
             return read_quote(root);
+        if (c == '"')
+            return read_string(root);
         if (isdigit(c))
             return make_number(root, read_number(c - '0'));
         if (c == '-' && isdigit(peek()))
