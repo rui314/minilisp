@@ -494,12 +494,12 @@ static Obj *read_quote(void *root) {
 static Obj *read_string(void *root) {
     char buf[STRING_MAX_LEN + 1];
     int len = 0;
-    while (peek() != '"') {
+    int c;
+    while ((c = getchar()) != '"') {
         if (STRING_MAX_LEN <= len)
             error("String too long");
-        buf[len++] = getchar();
+        buf[len++] = c;
     }
-    getchar();
     buf[len] = '\0';
     return make_string(root, buf);
 }
