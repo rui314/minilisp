@@ -34,6 +34,9 @@ run integer -1 -1
 run flonum 0.1 0.1
 run flonum 0.625625 0.625625
 run symbol a "'a"
+run string '"a"' '"a"'
+run string '"abc\"' '"abc\\"'
+run string '""abc"' '"\"abc"'
 run quote a "(quote a)"
 run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
@@ -96,6 +99,7 @@ run flonum= '()' '(= 1.2 (+ 1.1 0.1))'
 run eq t "(eq 'foo 'foo)"
 run eq t "(eq + +)"
 run eq '()' "(eq 'foo 'bar)"
+run eq '()' '(eq "foo" "foo")'
 run eq '()' "(eq + 'bar)"
 
 # gensym

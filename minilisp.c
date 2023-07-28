@@ -34,6 +34,7 @@ enum {
     TNUMBER = 1,
     TCELL,
     TSYMBOL,
+    TSTRING,
     TPRIMITIVE,
     TFUNCTION,
     TMACRO,
@@ -74,6 +75,8 @@ typedef struct Obj {
         };
         // Symbol
         char name[1];
+        // String
+        char str[1];
         // Primitive
         Primitive *fn;
         // Function or Macro
@@ -308,6 +311,7 @@ static void gc(void *root) {
         switch (scan1->type) {
         case TNUMBER:
         case TSYMBOL:
+        case TSTRING:
         case TPRIMITIVE:
             // Any of the above types does not contain a pointer to a GC-managed object.
             break;
@@ -363,6 +367,12 @@ static Obj *make_symbol(void *root, char *name) {
     return sym;
 }
 
+static Obj *make_string(void *root, char *str) {
+    Obj *r = alloc(root, TSTRING, strlen(str) + 1);
+    strcpy(r->str, str);
+    return r;
+}
+
 static Obj *make_primitive(void *root, Primitive *fn) {
     Obj *r = alloc(root, TPRIMITIVE, sizeof(Primitive *));
     r->fn = fn;
@@ -397,6 +407,8 @@ static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
 //
 // This is a hand-written recursive-descendent parser.
 //======================================================================
+
+#define STRING_MAX_LEN 200
 
 #define SYMBOL_MAX_LEN 200
 static const char symbol_chars[] = "~!@#$%^&*-_=+:/?<>";
@@ -479,6 +491,26 @@ static Obj *read_quote(void *root) {
     return *tmp;
 }
 
+static Obj *read_string(void *root) {
+    char buf[STRING_MAX_LEN + 1];
+    int len = 0;
+    int c;
+    while ((c = getchar()) != '"') {
+        if (STRING_MAX_LEN <= len)
+            error("String too long");
+        if (c == '\\') {
+            c = getchar();
+            switch (c) {
+            case 'n': c = '\n'; break;
+            case 'r': c = '\r'; break;
+            }
+        }
+        buf[len++] = c;
+    }
+    buf[len] = '\0';
+    return make_string(root, buf);
+}
+
 static double read_number(double val) {
     double power = 1;
     while (isdigit(peek()))
@@ -522,6 +554,8 @@ static Obj *read_expr(void *root) {
             return Dot;
         if (c == '\'')
             return read_quote(root);
+        if (c == '"')
+            return read_string(root);
         if (isdigit(c))
             return make_number(root, read_number(c - '0'));
         if (c == '-' && isdigit(peek()))
@@ -558,6 +592,7 @@ static void print(Obj *obj) {
         return
     CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
+    CASE(TSTRING, "\"%s\"", obj->str);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
@@ -685,6 +720,7 @@ static Obj *macroexpand(void *root, Obj **env, Obj **obj) {
 static Obj *eval(void *root, Obj **env, Obj **obj) {
     switch ((*obj)->type) {
     case TNUMBER:
+    case TSTRING:
     case TPRIMITIVE:
     case TFUNCTION:
     case TTRUE:
