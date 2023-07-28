@@ -996,7 +996,7 @@ static Obj *prim_fopen(void *root, Obj **env, Obj **list) {
     Obj *path = args->car;
     Obj *mode = args->cdr->car;
     if (path->type != TSTRING || mode->type != TSTRING)
-        error("Malformed fopen");
+        error("Parameters must be strings");
     return make_pointer(root, fopen(path->str, mode->str));
 }
 
