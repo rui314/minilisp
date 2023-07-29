@@ -100,7 +100,6 @@ typedef struct Obj {
 } Obj;
 
 // Constants
-static Obj *Null = &(Obj){ TPOINTER };
 static Obj *True = &(Obj){ TTRUE };
 static Obj *Nil = &(Obj){ TNIL };
 static Obj *Dot = &(Obj){ TDOT };
@@ -379,6 +378,8 @@ static Obj *make_string(void *root, char *str) {
 }
 
 static Obj *make_pointer(void *root, void *ptr) {
+    if (ptr == NULL)
+        return Nil;
     Obj *r = alloc(root, TPOINTER, sizeof(void *));
     r->ptr = ptr;
     return r;
@@ -604,7 +605,7 @@ static void print(Obj *obj) {
     CASE(TNUMBER, "%.15g", obj->value);
     CASE(TSYMBOL, "%s", obj->name);
     CASE(TSTRING, "\"%s\"", obj->str);
-    CASE(TPOINTER, "%p", obj->ptr);
+    CASE(TPOINTER, "<pointer>");
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
@@ -1010,8 +1011,6 @@ static void add_primitive(void *root, Obj **env, char *name, Primitive *fn) {
 
 static void define_constants(void *root, Obj **env) {
     DEFINE1(sym);
-    *sym = intern(root, "NULL");
-    add_variable(root, env, sym, &Null);
     *sym = intern(root, "t");
     add_variable(root, env, sym, &True);
 }

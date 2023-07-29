@@ -37,7 +37,6 @@ run symbol a "'a"
 run string '"a"' '"a"'
 run string '"abc\"' '"abc\\"'
 run string '""abc"' '"\"abc"'
-run pointer 0000000000000000 NULL
 run quote a "(quote a)"
 run quote 63 "'63"
 run quote '(+ 1 2)' "'(+ 1 2)"
@@ -160,4 +159,5 @@ run macroexpand '(if (= x 0) (print x))' "
 run recursion 55 '(defun f (x) (if (= x 0) 0 (+ (f (+ x -1)) x))) (f 10)'
 
 # Libraries
-run fopen 0000000000000000 '(fopen "missing" "r")'
+run fopen '<pointer>' '(fopen "test.sh" "r")'
+run fopen '()' '(fopen "missing" "r")'
