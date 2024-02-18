@@ -356,10 +356,14 @@ static Obj *cons(void *root, Obj **car, Obj **cdr) {
     return cell;
 }
 
-static Obj *make_symbol(void *root, char *name) {
-    Obj *sym = alloc(root, TSYMBOL, strlen(name) + 1);
-    strcpy(sym->name, name);
+static Obj *make_symbol_opaque(void *root, char *name, size_t length) {
+    Obj *sym = alloc(root, TSYMBOL, length);
+    memcpy(sym->name, name, length);
     return sym;
+}
+
+static Obj *make_symbol(void *root, char *name) {
+    return make_symbol_opaque(root, name, strlen(name));
 }
 
 static Obj *make_primitive(void *root, Primitive *fn) {
@@ -458,14 +462,17 @@ static Obj *read_list(void *root) {
 
 // May create a new symbol. If there's a symbol with the same name, it will not create a new symbol
 // but return the existing one.
-static Obj *intern(void *root, char *name) {
+static Obj *intern_opaque(void *root, char *name, size_t length) {
     for (Obj *p = Symbols; p != Nil; p = p->cdr)
-        if (strcmp(name, p->car->name) == 0)
+        if (p->car->length == length && memcmp(name, p->car->name, length) == 0)
             return p->car;
     DEFINE1(sym);
-    *sym = make_symbol(root, name);
+    *sym = make_symbol_opaque(root, name, length);
     Symbols = cons(root, sym, &Symbols);
     return *sym;
+}
+static Obj *intern(void *root, char *name) {
+    return intern_opaque(root, name, strlen(name));
 }
 
 // Reader marcro ' (single quote). It reads an expression and returns (quote <expr>).
@@ -551,7 +558,7 @@ static void print(Obj *obj) {
         printf(__VA_ARGS__);                    \
         return
     CASE(TINT, "%d", obj->value);
-    CASE(TSYMBOL, "%s", obj->name);
+    CASE(TSYMBOL, "%.*s", obj->length, obj->name);
     CASE(TPRIMITIVE, "<primitive>");
     CASE(TFUNCTION, "<function>");
     CASE(TMACRO, "<macro>");
