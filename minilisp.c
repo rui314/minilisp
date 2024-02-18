@@ -55,9 +55,11 @@ typedef struct Obj {
     // needs to check its type first, then access the following union members.
     int type;
 
-    // The total size of the object, including "type" field, this field, the contents, and the
-    // padding at the end of the object.
-    int size;
+    // The unaligned length of the object excluding "type" and "length" is stored to support
+    // opaque octet strings that include '\0'. The total size of the object, including the
+    // "type" and "length" field, this field, and the padding at the end of the object is
+    // calculated using the obj_size function.
+    int length;
 
     // Object values.
     union {
@@ -179,11 +181,14 @@ static inline size_t roundup(size_t var, size_t size) {
     return (var + size - 1) & ~(size - 1);
 }
 
-// Allocates memory block. This may start GC if we don't have enough memory.
-static Obj *alloc(void *root, int type, size_t size) {
+// Derive the aligned and padded size of an object from the length of its data in bytes
+static size_t obj_size(size_t length)
+{
+    size_t size;
+
     // The object must be large enough to contain a pointer for the forwarding pointer. Make it
     // larger if it's smaller than that.
-    size = roundup(size, sizeof(void *));
+    size = roundup(length, sizeof(void *));
 
     // Add the size of the type tag and size fields.
     size += offsetof(Obj, value);
@@ -192,6 +197,15 @@ static Obj *alloc(void *root, int type, size_t size) {
     // allocated at the proper alignment boundary. Currently we align the object at the same
     // boundary as the pointer.
     size = roundup(size, sizeof(void *));
+
+    return size;
+}
+
+// Allocates memory block. This may start GC if we don't have enough memory.
+static Obj *alloc(void *root, int type, size_t length) {
+    // The aligned and padded size is dervied from the length to support opaque octet strings that
+    // may include '\0'
+    size_t size = obj_size(length);
 
     // If the debug flag is on, allocate a new memory space to force all the existing objects to
     // move to new addresses, to invalidate the old addresses. By doing this the GC behavior becomes
@@ -213,7 +227,7 @@ static Obj *alloc(void *root, int type, size_t size) {
     // Allocate the object.
     Obj *obj = memory + mem_nused;
     obj->type = type;
-    obj->size = size;
+    obj->length = length;
     mem_nused += size;
     return obj;
 }
@@ -246,8 +260,9 @@ static inline Obj *forward(Obj *obj) {
 
     // Otherwise, the object has not been moved yet. Move it.
     Obj *newloc = scan2;
-    memcpy(newloc, obj, obj->size);
-    scan2 = (Obj *)((uint8_t *)scan2 + obj->size);
+    size_t size = obj_size(obj->length);
+    memcpy(newloc, obj, size);
+    scan2 = (Obj *)((uint8_t *)scan2 + size);
 
     // Put a tombstone at the location where the object used to occupy, so that the following call
     // of forward() can find the object's new location.
@@ -312,7 +327,7 @@ static void gc(void *root) {
         default:
             error("Bug: copy: unknown type %d", scan1->type);
         }
-        scan1 = (Obj *)((uint8_t *)scan1 + scan1->size);
+        scan1 = (Obj *)((uint8_t *)scan1 + obj_size(scan1->length));
     }
 
     // Finish up GC.
